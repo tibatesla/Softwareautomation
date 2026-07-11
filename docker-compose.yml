@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # The Shock-Absorber Queue Infrastructure
+  chestone-redis:
+    image: redis:7-alpine
+    container_name: chestone_redis_queue
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # The Core Backend Engine
+  chestone-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chestone_pipeline_app
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      # Map the internal Docker network to the Redis container
+      - REDIS_URL=redis://chestone-redis:6379
+    # Pulls your Supabase, HeyGen, Lofty, and GCS keys from your local .env file
+    env_file:
+      - .env
+    depends_on:
+      chestone-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redisdata:

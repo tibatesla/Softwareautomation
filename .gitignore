@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+output/
+captured_payload.json
+frame_check.png
+.DS_Store
