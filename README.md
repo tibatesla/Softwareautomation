@@ -1,5 +1,10 @@
 # Chestone Pipeline
 
+[![GitHub Repo](https://img.shields.io/badge/GitHub-Chestone-181717?logo=github)](https://github.com/tibatesla/Chestone)
+[![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+
 Chestone Pipeline is a TypeScript/Express backend that turns a real-estate lead or property record into an AI-generated, branded vertical video and hands the finished asset off to Make.com for ad distribution (Meta, TikTok, Google).
 
 This document describes what the code **actually does today**, based on the current state of [src/](src/). Where something is implemented but not wired up (or wired up but broken), it's called out explicitly in [Known issues](#known-issues-and-incomplete-areas) rather than presented as working.
