@@ -1,25 +1,19 @@
 // src/cron/budgetMonitor.ts
 import cron from 'node-cron';
 import { supabase } from '../services/supabase.service';
+import { makeService } from '../services/make.service';
 
 const MAX_CPA_KES = 4500;
-const KES_TO_USD = 130; // Use a fixed baseline exchange rate or pull from an API if needed
+const KES_TO_USD = 130;
 
-/**
- * Budget Control Circuit Breaker
- * Runs every hour to monitor performance data from Meta and TikTok.
- * Throttles campaigns if CPA exceeds KES 4,500.
- */
 export const initBudgetMonitorCron = () => {
-  // Schedule: Runs at minute 0 of every hour ('0 * * * *')
   cron.schedule('0 * * * *', async () => {
     console.log('[CRON] Executing hourly financial safety check...');
 
     try {
-      // 1. Fetch live metrics from your creative performance ledger
       const { data: metrics, error } = await supabase
         .from('fact_creative_performance')
-        .select('creative_id, platform, spend, clicks'); // Assuming 'clicks' or a 'leads' column captures conversion data
+        .select('creative_id, platform, spend, clicks');
 
       if (error) throw new Error(`Failed to fetch ad metrics: ${error.message}`);
       if (!metrics || metrics.length === 0) {
@@ -28,25 +22,21 @@ export const initBudgetMonitorCron = () => {
       }
 
       for (const row of metrics) {
-        const leads = row.clicks; // Swap with actual 'leads' column if tracking conversions directly
+        const leads = row.clicks;
         const spendUSD = row.spend;
 
-        if (leads === 0) continue; // Skip to avoid division by zero errors
+        if (leads === 0) continue;
 
-        // Calculate CPA in USD and convert to KES
         const cpaUSD = spendUSD / leads;
         const cpaKES = cpaUSD * KES_TO_USD;
 
         console.log(`[Monitor] Creative ${row.creative_id} on ${row.platform} | Current CPA: KES ${cpaKES.toFixed(2)}`);
 
-        // 2. Circuit Breaker Condition Trigger
         if (cpaKES > MAX_CPA_KES) {
           console.warn(`[CIRCUIT BREAKER ALERT] CPA breached threshold! KES ${cpaKES.toFixed(2)} > KES ${MAX_CPA_KES}`);
-          
           await throttleCampaign(row.creative_id, row.platform, cpaKES);
         }
       }
-
     } catch (error: any) {
       console.error('[CRON Fatal Error] Budget monitoring loop failed:', error.message);
     }
@@ -56,13 +46,18 @@ export const initBudgetMonitorCron = () => {
 };
 
 /**
- * Dispatches throttle commands to HyperAI and logs alerts.
+ * Dispatches a real throttle command to Make.com (which controls the
+ * actual Meta/TikTok/Google ad accounts), and marks the row so this same
+ * creative doesn't get re-throttled every hour once it's already paused.
  */
 async function throttleCampaign(creativeId: string, platform: string, currentCpa: number) {
   try {
-    console.log(`[HyperAI] Sending throttle payload for creative: ${creativeId} on ${platform}`);
+    // Dispatch FIRST — if this fails, we don't want the DB to claim
+    // something is throttled when the actual ad platform never got the
+    // command. Better to retry next hour (still spending, but at least
+    // accurately tracked) than to silently mark it done and stop trying.
+    await makeService.throttleCampaign(creativeId, platform, currentCpa);
 
-    // Call your HyperAI endpoint or update the status in your DB so the downstream router updates the ad networks
     const { error } = await supabase
       .from('fact_creative_performance')
       .update({ status: 'THROTTLED', updated_at: new Date().toISOString() })
@@ -71,9 +66,12 @@ async function throttleCampaign(creativeId: string, platform: string, currentCpa
 
     if (error) throw error;
 
-    // TODO: Wire your WhatsAppService or SMS platform here to message your internal team instantly
-    console.log(`[ALERT DISPATCHED] Emergency alert sent to team: Creative ${creativeId} on ${platform} throttled at KES ${currentCpa.toFixed(0)} CPA.`);
+    console.log(`[ALERT DISPATCHED] Creative ${creativeId} on ${platform} throttled at KES ${currentCpa.toFixed(0)} CPA.`);
 
+    // TODO: wire an actual notification (WhatsApp/SMS/Slack) here so a
+    // human knows spend was just paused — a console.log nobody's watching
+    // isn't a real alert. Confirm which channel you actually want before
+    // building it; don't guess at another integration.
   } catch (error: any) {
     console.error(`[Emergency Fail] Failed to throttle campaign ${creativeId}:`, error.message);
   }

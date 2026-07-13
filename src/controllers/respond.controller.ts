@@ -30,8 +30,8 @@ export const handleRespondWebhook = async (req: Request, res: Response): Promise
     // 3. Sync to GoHighLevel (The Source of Truth)
     // We only push to GHL if the lead successfully passed the AI qualification matrix
     if (parsedData.tags.includes('Qualified_Lead')) {
-     // await syncQualifiedLeadToGHL(parsedData);
-     console.log("[System] GHL Sync bypassed. Lead saved to Supabase only.");
+      await syncQualifiedLeadToGHL(parsedData);
+    // console.log("[System] GHL Sync bypassed. Lead saved to Supabase only.");
     }
 
     // 4. Acknowledge Receipt to Make.com quickly to prevent timeout loops

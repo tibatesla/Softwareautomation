@@ -39,7 +39,7 @@ export class CrmWebhookController {
       }
 
       // Dispatch tracking instructions directly to the processing queue
-      const taskPayload: VideoJobPayload = {
+      /*const taskPayload: VideoJobPayload = {
         leadId: lead_id,
         clientName: name,
         propertyId: target_property_id,
@@ -48,12 +48,12 @@ export class CrmWebhookController {
         fbc: attributionContext.fbc,
         gclid: attributionContext.gclid,
       };
-
-      await videoGenerationQueue.add(taskPayload, {
+*/
+     /* await videoGenerationQueue.add(taskPayload, {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
         removeOnComplete: true,
-      });
+      }); */
 
       res.status(200).json({
         success: true,

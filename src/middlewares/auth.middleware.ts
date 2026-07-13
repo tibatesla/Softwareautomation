@@ -16,7 +16,7 @@ export interface AuthenticatedRequest extends Request {
  */
 export const verifyMakeWebhookToken = (req: Request, res: Response, next: NextFunction): void => {
   const authHeader = req.headers['authorization'] || req.headers['x-make-token'];
-  const expectedToken = process.env.MAKE_WEBHOOK_URL;
+  const expectedToken = (process.env.MAKE_WEBHOOK_SECRET || '').trim();
 
   if (!expectedToken) {
     console.error('[CRITICAL] MAKE_WEBHOOK_SECRET is not defined in environment variables.');
@@ -24,13 +24,15 @@ export const verifyMakeWebhookToken = (req: Request, res: Response, next: NextFu
     return;
   }
 
-  // Support both "Bearer <token>" and raw token formats
-  const token = authHeader?.toString().startsWith('Bearer ') 
-    ? authHeader.toString().split(' ')[1] 
-    : authHeader;
+  const rawHeader = (authHeader ?? '').toString().trim();
+  const token = rawHeader.toLowerCase().startsWith('bearer ')
+    ? rawHeader.slice(7).trim()
+    : rawHeader;
 
   if (!token || token !== expectedToken) {
-    console.warn('[Security Firewall] 401 Blocked: Unauthorized Make.com intercept.');
+    // TEMP DEBUG — REMOVE after this works; logs lengths not full secrets
+    //console.warn(`[Auth Debug] stripped token len=${token.length} vs expected len=${expectedToken.length}, equal=${token === expectedToken}`);
+    //console.warn('[Security Firewall] 401 Blocked: Unauthorized Make.com intercept.');
     res.status(401).json({ error: 'Unauthorized webhook intercept: Invalid or missing token' });
     return;
   }

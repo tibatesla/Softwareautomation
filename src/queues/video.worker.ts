@@ -1,39 +1,37 @@
 // src/queues/video.worker.ts
 import { videoGenerationQueue } from '../config/queue.config';
 import { Job } from 'bull';
-import { heygenService, ProcessVideoParams } from '../services/heygen.service';
+import { videoOrchestrator, ProduceVariantParams } from '../services/video-orchestrator.service';
 
-// Hard enforcement limit matching your downstream rendering concurrency thresholds
-const MAXIMUM_HEYGEN_CONCURRENCY = 10;
+// Keep concurrency LOW with the new architecture — each job now spawns
+// HeyGen renders + Runway generations + multiple FFmpeg encodes. 2 parallel
+// jobs is the safe ceiling on a laptop; 10 would melt it and rate-limit both APIs.
+const MAX_CONCURRENCY = 2;
 
-videoGenerationQueue.process(MAXIMUM_HEYGEN_CONCURRENCY, async (job: Job<ProcessVideoParams>) => {
-  const { internal_db_id } = job.data;
-  
-  console.log(`[Worker Process] [Job:${job.id}] Initiating HeyGen synthesis pipeline for DB ID: ${internal_db_id}`);
+videoGenerationQueue.process(MAX_CONCURRENCY, async (job: Job<ProduceVariantParams>) => {
+  const { internal_db_id, variant } = job.data;
+
+  console.log(`[Worker] [Job:${job.id}] Starting ${variant} production for DB ID: ${internal_db_id}`);
 
   try {
-    // Pipeline execution: Delegate directly to the HeyGen service
-    await heygenService.processVideo(job.data);
+    // ALL pipeline logic lives in the orchestrator (vision → scenes →
+    // HeyGen chunks + Runway → synced assembly → upload → deploy).
+    // The worker's only job is queue mechanics — don't add pipeline
+    // steps here, that's what caused the TS2554 crash.
+    await videoOrchestrator.produceVariantVideo(job.data);
 
-    return {
-      status: 'SUCCESS',
-      internal_db_id
-    };
+    return { status: 'SUCCESS', internal_db_id, variant };
   } catch (error: any) {
-    const failureMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[Worker Operational Failure] on Job ${job.id}:`, failureMessage);
-    // Throwing the error here tells Redis/Bull that the job failed,
-    // triggering the exponential backoff retry mechanism automatically.
-    throw error;
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`[Worker] Job ${job.id} (${variant}) failed:`, msg);
+    throw error; // let Bull's retry/backoff handle it
   }
 });
 
-// Event Listeners for Queue Monitoring
-videoGenerationQueue.on('completed', (job, result) => {
-  console.log(`[Queue Master] Task completed successfully for Job ID ${job.id}.`);
+videoGenerationQueue.on('completed', (job) => {
+  console.log(`[Queue] Job ${job.id} completed.`);
 });
 
 videoGenerationQueue.on('failed', (job, err) => {
-  const failedMessage = err instanceof Error ? err.message : String(err);
-  console.error(`[Queue Master] Task failed for Job ID ${job.id}:`, failedMessage);
+  console.error(`[Queue] Job ${job.id} failed:`, err instanceof Error ? err.message : String(err));
 });

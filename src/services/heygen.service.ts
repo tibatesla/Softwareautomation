@@ -3,15 +3,36 @@ import { supabase } from './supabase.service';
 
 export type VariantType = 'Investment' | 'Lifestyle' | 'Architectural';
 
+export interface VideoScene {
+  imageUrl: string;
+  prompt: string;
+  script: string;
+}
+
+export interface ProcessVideoParams {
+  internal_db_id: string;
+  scenes: VideoScene[];
+}
+
 export interface ProcessVideoParams {
   internal_db_id: number;
-  display_price: string;
-  urgency_factor: 'high' | 'low';
-  property_data: any; 
+  variant: VariantType; // now specified by the caller — poller queues all 3
+  property_data: {
+    price?: number;
+    price_min?: number;
+    price_max?: number;
+    unit_type?: string;
+    specific_location?: string;
+    property_name?: string;
+    amenities?: string[];
+    payment_plan_structure?: string;
+    house_size_sqft?: number;
+    [key: string]: unknown;
+  };
 }
 
 interface PersonaTemplate {
-  internal_tag: string; 
+  internal_tag: string;
   avatar_id: string;
   voice_id: string;
 }
@@ -20,7 +41,21 @@ class HeyGenService {
   private readonly HEYGEN_API_URL = 'https://api.heygen.com/v2/video/generate';
   private readonly API_KEY = process.env.HEYGEN_API_KEY;
 
-  // IMPORTANT: Ensure your active paid Avatar/Voice IDs are populated here!
+
+  public async generateAudioChunk(scriptText: string): Promise<string> {
+    console.log(`[HeyGen] Generating audio chunk for script: "${scriptText.substring(0, 30)}..."`);
+    
+    // TODO: Insert your actual HeyGen API fetch request here.
+    // For now, we return a mock file path so the TypeScript compiler passes 
+    // and you can test the pipeline flow.
+    return '/tmp/mock_heygen_audio.mp4'; 
+  }
+  // ⚠️ PLACEHOLDER IDS — every persona below uses the SAME avatar_id/voice_id
+  // right now, which means Investment/Lifestyle/Architectural currently look
+  // and sound IDENTICAL despite different labels. Get real distinct IDs from
+  // your HeyGen dashboard (Avatars/Voices sections, or your custom-trained
+  // avatars if you have them) and replace every entry below before this
+  // produces the persona variety your contract's Section 1.2 requires.
   private readonly personaMatrix: Record<VariantType, PersonaTemplate[]> = {
     Investment: [
       { internal_tag: 'inv_avatar_alpha', avatar_id: '27ee7bdcf0e3442f8fee7dd48618a895', voice_id: '330290724a1b470fb63153f34d4c0183' },
@@ -39,13 +74,16 @@ class HeyGenService {
     ]
   };
 
-  public async processVideo(params: ProcessVideoParams): Promise<void> {
+  public async processVideo(params: { internal_db_id: number; variant: VariantType; property_data: ProcessVideoParams['property_data'] }): Promise<void> {
     try {
-      console.log(`[Stage 3] Initiating HeyGen build for Property DB ID: ${params.internal_db_id}`);
+      console.log(`[Stage 3] Initiating HeyGen build for Property DB ID: ${params.internal_db_id}, variant: ${params.variant}`);
 
-      const variant = this.mapToVariantStrategy(params.property_data, params.urgency_factor);
-      const persona = await this.selectOptimalPersona(variant);
-      const payload = this.constructHeyGenPayload(params, variant, persona);
+      const displayPrice = this.formatDisplayPrice(
+        params.property_data.price_min ?? params.property_data.price,
+        params.property_data.price_max ?? params.property_data.price,
+      );
+      const persona = await this.selectOptimalPersona(params.variant);
+      const payload = this.constructHeyGenPayload(params.property_data, displayPrice, params.variant, persona);
 
       const response = await fetch(this.HEYGEN_API_URL, {
         method: 'POST',
@@ -62,29 +100,50 @@ class HeyGenService {
       }
 
       const responseData = await response.json();
-      const heygenJobId = responseData.data?.video_id || responseData.data?.id; 
+      const heygenJobId = responseData.data?.video_id || responseData.data?.id;
 
       if (!heygenJobId) throw new Error("Failed to extract valid video_id from HeyGen API response.");
 
       const trackingReference = `${heygenJobId}_${persona.internal_tag}`;
+
+      // Tracked per-variant now, not on the property row directly — each
+      // property has 3 independent rows in property_video_variants.
       const { error: updateError } = await supabase
-        .from('chestone_properties')
-        .update({ heygen_job_id: trackingReference, status: 'RENDERING' })
-        .eq('id', params.internal_db_id);
+        .from('property_video_variants')
+        .update({ heygen_job_id: trackingReference, status: 'RENDERING', updated_at: new Date().toISOString() })
+        .eq('property_id', params.internal_db_id)
+        .eq('variant', params.variant);
 
       if (updateError) throw new Error(`Supabase Update Error: ${updateError.message}`);
 
-      console.log(`[Stage 3] Success. Job ${heygenJobId} queued using Avatar: ${persona.internal_tag}.`);
+      console.log(`[Stage 3] Success. Job ${heygenJobId} queued using Avatar: ${persona.internal_tag} (variant: ${params.variant}).`);
 
     } catch (error) {
-      console.error(`[Stage 3 Fatal Error] Failed to process video for DB ID ${params.internal_db_id}:`, error);
+      console.error(`[Stage 3 Fatal Error] Failed to process ${params.variant} video for DB ID ${params.internal_db_id}:`, error);
       try {
-        await supabase.from('chestone_properties').update({ status: 'FAILED' }).eq('id', params.internal_db_id);
+        await supabase
+          .from('property_video_variants')
+          .update({ status: 'FAILED', updated_at: new Date().toISOString() })
+          .eq('property_id', params.internal_db_id)
+          .eq('variant', params.variant);
       } catch (dbError) {
         console.error('[Stage 3 Database Fallback Error] Network failure on fallback:', dbError);
       }
-      throw error; 
+      throw error;
     }
+  }
+
+  /** Formats a price range into the script-friendly spoken string. Handles
+   *  missing price gracefully, and collapses to a single figure when
+   *  min === max (most properties won't have a real range yet). */
+  private formatDisplayPrice(min: number | undefined | null, max: number | undefined | null): string {
+    if (!min || min <= 0) return 'a price available on request';
+    const fmt = (n: number) => {
+      const millions = n / 1_000_000;
+      return millions >= 1 ? `KES ${millions.toFixed(millions % 1 === 0 ? 0 : 1)} Million` : `KES ${n.toLocaleString()}`;
+    };
+    if (!max || max === min) return fmt(min);
+    return `starting from ${fmt(min)}, up to ${fmt(max)}`;
   }
 
   private async selectOptimalPersona(variant: VariantType): Promise<PersonaTemplate> {
@@ -113,17 +172,14 @@ class HeyGenService {
     return pool[randomIndex];
   }
 
-  private mapToVariantStrategy(propertyData: any, urgencyFactor: string): VariantType {
-    if (urgencyFactor === 'high' || propertyData.payment_plan_structure?.toLowerCase().includes('roi')) return 'Investment';
-    if (propertyData.house_size_sqft && propertyData.house_size_sqft > 4000) return 'Architectural';
-    return 'Lifestyle';
-  }
+  private constructHeyGenPayload(
+    propertyData: ProcessVideoParams['property_data'],
+    displayPrice: string,
+    variant: VariantType,
+    persona: PersonaTemplate,
+  ) {
+    const textScript = `Welcome to Chestone Properties. We are thrilled to present this magnificent ${variant} opportunity located at ${propertyData.specific_location || 'Nairobi'}. Available for ${displayPrice}.`;
 
-  private constructHeyGenPayload(params: ProcessVideoParams, variant: VariantType, persona: PersonaTemplate) {
-    const textScript = `Welcome to Chestone Properties. We are thrilled to present this magnificent ${variant} opportunity located at ${params.property_data.specific_location}. Available for ${params.display_price}.`;
-    
-    // Notice how clean this is. We only request the Avatar on a White Background.
-    // FFmpeg will handle the Annex B branding locally when the webhook arrives.
     return {
       video_inputs: [
         {

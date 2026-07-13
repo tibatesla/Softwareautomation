@@ -119,6 +119,40 @@ class MakeService {
       console.error(`[SENTRY ERROR TRACE]:`, error.message || error);
     }
   }
+
+  public async throttleCampaign(creativeId: string, platform: string, currentCpaKes: number): Promise<void> {
+    try {
+      if (!this.MAKE_WEBHOOK_URL) {
+        console.warn('[Throttle] MAKE_WEBHOOK_URL missing — cannot dispatch throttle command.');
+        return;
+      }
+
+      console.warn(`[Throttle] Dispatching THROTTLE command for ${creativeId} on ${platform} (CPA: KES ${currentCpaKes.toFixed(0)})`);
+
+      const response = await fetch(this.MAKE_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'THROTTLE',
+          creative_id: creativeId,
+          platform,
+          reason: `CPA breached threshold: KES ${currentCpaKes.toFixed(0)}`,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Make.com throttle dispatch failed: ${response.status} - ${errorText}`);
+      }
+
+      console.log(`[Throttle] Command dispatched successfully for ${creativeId} on ${platform}.`);
+    } catch (error: any) {
+      console.error(`[Throttle] Failed to dispatch throttle command for ${creativeId}:`, error.message);
+      throw error;
+    }
+  }
 }
 
 export const makeService = new MakeService();
