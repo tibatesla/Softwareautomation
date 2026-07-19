@@ -3,6 +3,11 @@ import { promisify } from 'util';
 import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
+import {
+  chainBrandingLabels,
+  brandingToVfString,
+  PropertyOverlayData,
+} from './videoBranding.service';
 
 const execFileAsync = promisify(execFile);
 
@@ -15,10 +20,17 @@ const FPS = 25;
 const OUTPUT_W = 1080;
 const OUTPUT_H = 1920;
 const HEADER_H = 200;
-const INFO_BAND_H = 170; 
+// Reserved space for price/unit/location text. Was 170 — grown to 230 to
+// match videoBranding.service.ts's larger PRICE_TOP_MARGIN (80px, up from
+// 40px, since 40px still visually read as the price touching the navy
+// header at real phone viewing scale). If the branding module's margins
+// change again, this must grow/shrink to match or content will overlap
+// the text (too small) or leave a dead gap (too big).
+const INFO_BAND_H = 230;
 const FOOTER_H = 250;
 const CONTENT_W = OUTPUT_W;
-const CONTENT_H = OUTPUT_H - HEADER_H - INFO_BAND_H - FOOTER_H; // 1300
+const CONTENT_H = OUTPUT_H - HEADER_H - INFO_BAND_H - FOOTER_H; // 1240
+const CONTENT_Y_OFFSET = HEADER_H + INFO_BAND_H; // 430 — single source for both pipelines below
 
 const BACKGROUND_MUSIC_PATH = process.env.BACKGROUND_MUSIC_PATH;
 const BACKGROUND_MUSIC_VOLUME = 0.12;
@@ -45,30 +57,37 @@ async function downloadToTemp(url: string, prefix: string, attempt = 1): Promise
   }
 }
 
-function escapeDrawtext(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/:/g, '\\:')
-    .replace(/'/g, "\u2019")
-    .replace(/%/g, '\\%');
-}
-
 function formatPriceKes(min: number, max: number): string {
   const fmt = (n: number) =>
     n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M` : `${Math.round(n / 1000)}K`;
   return min === max ? `KES ${fmt(min)}` : `KES ${fmt(min)} - ${fmt(max)}`;
 }
 
-export interface PropertyOverlayData {
-  price: string;
-  location: string;
-  unitType: string;
+export interface SyncedSceneInput {
+  runwayVideoPath: string;
+  heygenChunkPath: string;
 }
 
-interface SyncedSceneInput {
-  runwayVideoPath: string;  // local path, from runwayService.generateSceneVideo
-  heygenChunkPath: string;  // local path, from heygenChunkService.generateVoiceChunk
+// Cinematic Avatar (HeyGen Seedance) scenes don't come with a script-synced
+// voice track the way Avatar V/IV chunks do — HeyGen generates the whole
+// shot (avatar + environment + camera movement) from a prompt, with no
+// narration tied to it. Narration for these scenes is generated separately
+// (TTS) and muxed on here instead. The compositing is also fundamentally
+// different from a talking chunk: there's no green-screen avatar to overlay
+// onto separate B-roll — the cinematic clip already IS the full scene.
+export interface CinematicSceneInput {
+  cinematicVideoPath: string;   // output of generateCinematicShot in cinematic-avatar.service.ts
+  narrationAudioPath: string;   // separately generated TTS, ideally requested at
+                                 // the same duration as the cinematic clip so no
+                                 // stretching/padding is needed
 }
+
+// Discriminated union so buildDynamicSyncedAsset can accept a mixed list of
+// scenes — e.g. one cinematic "walking in" opener followed by proven
+// talking-avatar chunks for the rest of the script.
+export type DynamicScene =
+  | ({ kind: 'talking' } & SyncedSceneInput)
+  | ({ kind: 'cinematic' } & CinematicSceneInput);
 
 function splitPhotos(photoPaths: string[]): { introPaths: string[]; outroPaths: string[] } {
   if (photoPaths.length === 0) throw new Error('At least one photo is required.');
@@ -115,11 +134,6 @@ export class FFmpegService {
       const { introPaths, outroPaths } = splitPhotos(photoPaths);
       const introClipDuration = INTRO_DURATION / introPaths.length;
       const outroClipDuration = OUTRO_DURATION / outroPaths.length;
-
-      const font = 'fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
-      const priceText = escapeDrawtext(overlay.price);
-      const locationText = escapeDrawtext(overlay.location);
-      const unitTypeText = escapeDrawtext(overlay.unitType);
 
       const args: string[] = ['-y', '-loglevel', 'error', '-stats'];
       const inputIndexMap: number[] = [];
@@ -191,23 +205,10 @@ export class FFmpegService {
       );
 
       filterParts.push(`[intro][mid][outro]concat=n=3:v=1:a=0[content]`);
-      filterParts.push(`[${whiteBgInputIndex}:v][content]overlay=0:${HEADER_H + INFO_BAND_H}[vertical]`);
+      filterParts.push(`[${whiteBgInputIndex}:v][content]overlay=0:${CONTENT_Y_OFFSET}[vertical]`);
 
-      filterParts.push(`[vertical]drawbox=x=0:y=0:w=iw:h=${HEADER_H}:color=#002b5b@1:t=fill[b1]`);
-      filterParts.push(`[b1]drawtext=${font}:text='Chestone Properties':fontcolor=#C5A059:fontsize=52:x=40:y=75[t1]`);
-      filterParts.push(`[t1]drawtext=${font}:text='Call/Text +254 726 111 133':fontcolor=#C5A059:fontsize=42:x=w-tw-40:y=80[t2]`);
-
-      filterParts.push(`[t2]drawtext=${font}:text='${priceText}':fontcolor=#002b5b:fontsize=60:x=30:y=${HEADER_H + 18}[p1]`);
-      filterParts.push(`[p1]drawtext=${font}:text='${unitTypeText}':fontcolor=#002b5b:fontsize=34:x=30:y=${HEADER_H + 92}[p2]`);
-      filterParts.push(`[p2]drawtext=${font}:text='${locationText}':fontcolor=#7a7a7a:fontsize=28:x=30:y=${HEADER_H + 132}[p3]`);
-
-      // FOOTER FIX: Background is now white so the dark blue text shows up clearly
-      filterParts.push(`[p3]drawbox=x=0:y=h-${FOOTER_H}:w=iw:h=${FOOTER_H}:color=white@1:t=fill[b2]`);
-      filterParts.push(`[b2]drawtext=${font}:text='Structured Property Solution':fontcolor=#C5A059:fontsize=48:x=(w-tw)/2:y=h-180[t3]`);
-      filterParts.push(`[t3]drawtext=${font}:text='High Returns on your investment.':fontcolor=#002b5b:fontsize=36:x=(w-tw)/2:y=h-110[t4]`);
-      filterParts.push(`[t4]drawtext=${font}:text='Chestone Properties Ltd':fontcolor=#002b5b@0.4:fontsize=48:x=w-tw-30:y=h-th-260[pre_final]`);
-
-      filterParts.push(`[pre_final]scale=${OUTPUT_W}:${OUTPUT_H}:force_original_aspect_ratio=disable,setsar=1[final_visual]`);
+      filterParts.push(chainBrandingLabels(overlay, 'vertical', 'branded', { headerH: HEADER_H, footerH: FOOTER_H }));
+      filterParts.push(`[branded]scale=${OUTPUT_W}:${OUTPUT_H}:force_original_aspect_ratio=disable,setsar=1[final_visual]`);
 
       filterParts.push(`anullsrc=channel_layout=stereo:sample_rate=44100,atrim=0:${INTRO_DURATION}[introAud]`);
       filterParts.push(`[${heygenInputIndex}:a]asetpts=PTS-STARTPTS[midAud]`);
@@ -251,143 +252,188 @@ export class FFmpegService {
     }
   }
 
-  // PIPELINE PER SCENE (buildDynamicSyncedAsset):
-  //   1. ffprobe the HeyGen chunk's audio duration (the truth source)
-  //   2. Loop the 5s Runway clip if the audio is longer; trim to exact duration
-  //   3. Scale/crop Runway to the 1080x1470 content area, pad onto 1080x1920 canvas
-  //   4. Mux: Runway visuals + HeyGen audio, encoded with IDENTICAL codec params
-  //   5. concat demuxer (-c copy) glues all chunks losslessly — identical params
-  //      across chunks is what makes -c copy safe; change one and it breaks
-  //   6. Final pass burns branding (header/footer/price band) over the whole thing
-
-  /** Reads a media file's duration in seconds via ffprobe. */
   private async getDurationSeconds(filePath: string): Promise<number> {
-  const { stdout } = await execFileAsync('ffprobe', [
-    '-v', 'error',
-    '-show_entries', 'format=duration',
-    '-of', 'csv=p=0',
-    filePath,
-  ]);
-  const dur = parseFloat(stdout.trim());
-  if (!dur || isNaN(dur)) throw new Error(`ffprobe returned invalid duration for ${filePath}`);
-  return dur;
-}
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'csv=p=0',
+      filePath,
+    ]);
+    const dur = parseFloat(stdout.trim());
+    if (!dur || isNaN(dur)) throw new Error(`ffprobe returned invalid duration for ${filePath}`);
+    return dur;
+  }
 
-/**
- * Builds one synced chunk: Runway visuals stretched/looped/trimmed to match
- * the HeyGen chunk's exact audio duration, sized to the final vertical canvas.
- */
-private async buildSyncedChunk(
-  scene: SyncedSceneInput,
-  chunkIndex: number,
-  tempId: string,
-): Promise<string> {
-  const audioDuration = await this.getDurationSeconds(scene.heygenChunkPath);
-  const chunkPath = path.join(os.tmpdir(), `chunk_${tempId}_${chunkIndex}.mp4`);
-
-  // -stream_loop -1 loops the 5s Runway clip endlessly; -t caps output at the
-  // audio's exact duration. If audio < 5s, the loop simply never repeats.
-  await execFileAsync('ffmpeg', [
-    '-y', '-loglevel', 'error',
-    '-stream_loop', '-1', '-i', scene.runwayVideoPath,
-    '-i', scene.heygenChunkPath,
-    '-filter_complex',
-    // Content area 1080x1470 (between 200px header and 250px footer),
-    // fill-and-crop for full-bleed, then padded onto the full 1080x1920
-    // white canvas at y=370 (header 200 + info band 170) so the final
-    // branding pass just draws over the top without repositioning video.
-    `[0:v]scale=1080:1350:force_original_aspect_ratio=increase,crop=1080:1350,setsar=1,fps=25,` +
-    `pad=1080:1920:0:370:color=white[v]`,
-    '-map', '[v]',
-    '-map', '1:a',
-    '-t', audioDuration.toFixed(3),
-    // IDENTICAL codec params across every chunk — mandatory for -c copy concat
-    '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-    chunkPath,
-  ], { timeout: 180_000, maxBuffer: 50 * 1024 * 1024 });
-
-  console.log(`[FFmpeg] Chunk ${chunkIndex} synced: ${audioDuration.toFixed(1)}s`);
-  return chunkPath;
-}
-
-/**
- * Full dynamic assembly: N scenes in, one branded vertical ad out.
- * Total video length = sum of all HeyGen audio durations (no fixed 18s —
- * the script drives the length now).
- */
-public async buildDynamicSyncedAsset(
-  scenes: SyncedSceneInput[],
-  propertyId: string,
-  overlay: PropertyOverlayData,
-): Promise<string> {
-  if (scenes.length === 0) throw new Error('buildDynamicSyncedAsset: no scenes provided');
-
-  const safeId = propertyId.replace(/[^a-zA-Z0-9_-]/g, '');
-  const tempId = `${safeId}_${Date.now()}`;
-  const chunkPaths: string[] = [];
-  const concatListPath = path.join(os.tmpdir(), `concat_${tempId}.txt`);
-  const stitchedPath = path.join(os.tmpdir(), `stitched_${tempId}.mp4`);
-  const outputPath = path.join(os.tmpdir(), `final_synced_${tempId}.mp4`);
-
-  try {
-    // 1. Build every synced chunk (sequential — parallel FFmpeg encodes on a
-    //    laptop compete for CPU and all slow down; sequential is net faster)
-    for (let i = 0; i < scenes.length; i++) {
-      chunkPaths.push(await this.buildSyncedChunk(scenes[i], i, tempId));
-    }
-
-    // 2. concat demuxer — lossless glue, no re-encode
-    const listContent = chunkPaths.map((p) => `file '${p}'`).join('\n');
-    await fs.writeFile(concatListPath, listContent);
-    await execFileAsync('ffmpeg', [
-      '-y', '-loglevel', 'error',
-      '-f', 'concat', '-safe', '0', '-i', concatListPath,
-      '-c', 'copy',
-      stitchedPath,
-    ], { timeout: 120_000 });
-
-    // 3. Final branding pass over the whole stitched video
-    const font = 'fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
-    const esc = (t: string) => t.replace(/\\/g, '\\\\').replace(/:/g, '\\:').replace(/'/g, '\u2019').replace(/%/g, '\\%');
-    const priceText = esc(overlay.price);
-    const unitTypeText = esc(overlay.unitType);
-    const locationText = esc(overlay.location);
-
-    const brandingFilter = [
-      `drawbox=x=0:y=0:w=iw:h=200:color=#002b5b@1:t=fill`,
-      `drawtext=${font}:text='Chestone Properties':fontcolor=#C5A059:fontsize=52:x=40:y=75`,
-      `drawtext=${font}:text='Call/Text +254 726 111 133':fontcolor=#C5A059:fontsize=42:x=w-tw-40:y=80`,
-      `drawtext=${font}:text='${priceText}':fontcolor=#002b5b:fontsize=60:x=30:y=218`,
-      `drawtext=${font}:text='${unitTypeText}':fontcolor=#002b5b:fontsize=34:x=30:y=292`,
-      `drawtext=${font}:text='${locationText}':fontcolor=#7a7a7a:fontsize=28:x=30:y=332`,
-      `drawbox=x=0:y=h-250:w=iw:h=250:color=#002b5b@1:t=fill`,
-      `drawtext=${font}:text='Structured Property Solution':fontcolor=#C5A059:fontsize=48:x=(w-tw)/2:y=h-180`,
-      `drawtext=${font}:text='High Returns on your investment.':fontcolor=#FFFFFF:fontsize=36:x=(w-tw)/2:y=h-110`,
-    ].join(',');
+  private async buildSyncedChunk(
+    scene: SyncedSceneInput,
+    chunkIndex: number,
+    tempId: string,
+  ): Promise<string> {
+    const audioDuration = await this.getDurationSeconds(scene.heygenChunkPath);
+    const chunkPath = path.join(os.tmpdir(), `chunk_${tempId}_${chunkIndex}.mp4`);
 
     await execFileAsync('ffmpeg', [
       '-y', '-loglevel', 'error',
-      '-i', stitchedPath,
-      '-vf', brandingFilter,
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-      '-c:a', 'copy',
-      outputPath,
+      '-stream_loop', '-1', '-i', scene.runwayVideoPath,
+      '-i', scene.heygenChunkPath,
+      '-filter_complex',
+      // Content area is CONTENT_W x CONTENT_H (matches the single source
+      // above), padded onto the full canvas at CONTENT_Y_OFFSET — was
+      // hardcoded "370" separately from the other pipeline's math before,
+      // which is exactly how these two functions drifted out of sync
+      // originally. Both now reference the same shared constants.
+      `[0:v]scale=1080:${CONTENT_H}:force_original_aspect_ratio=increase,crop=1080:${CONTENT_H},setsar=1,fps=25[bg];` +
+      `[1:v]chromakey=0x00FF00:0.25:0.08,despill=type=green,scale=480:-2[avatar];` +
+      `[bg][avatar]overlay=(W-w)/2:H-h-20[scene];` +
+      `[scene]pad=${OUTPUT_W}:${OUTPUT_H}:0:${CONTENT_Y_OFFSET}:color=white[v]`,
+      '-map', '[v]',
+      '-map', '1:a',
+      '-t', audioDuration.toFixed(3),
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+      chunkPath,
     ], { timeout: 180_000, maxBuffer: 50 * 1024 * 1024 });
 
-    console.log(`[FFmpeg] Dynamic synced render complete: ${outputPath}`);
-    return outputPath;
-  } finally {
-    // Clean intermediates; keep only the final output
-    await Promise.all([
-      ...chunkPaths.map((p) => fs.unlink(p).catch(() => {})),
-      fs.unlink(concatListPath).catch(() => {}),
-      fs.unlink(stitchedPath).catch(() => {}),
-      ...scenes.flatMap((s) => [
-        fs.unlink(s.runwayVideoPath).catch(() => {}),
-        fs.unlink(s.heygenChunkPath).catch(() => {}),
-      ]),
+    console.log(`[FFmpeg] Chunk ${chunkIndex} synced: ${audioDuration.toFixed(1)}s`);
+    return chunkPath;
+  }
+
+  /**
+   * Composites a Cinematic Avatar (Seedance) clip with separately-generated
+   * narration audio, matching buildSyncedChunk's output contract (same
+   * canvas dimensions, same content area, same white-pad-to-full-frame
+   * behavior) so both chunk types concatenate seamlessly downstream.
+   *
+   * Deliberately does NOT loop the cinematic video to fill a duration
+   * mismatch the way buildSyncedChunk loops B-roll (-stream_loop -1).
+   * B-roll looping is safe because ambient motion has no obvious seam.
+   * Looping a clip of a person walking/gesturing is not safe — a mid-stride
+   * jump back to frame 1 is visibly broken. Duration mismatches should be
+   * minimized upstream (request the cinematic clip at the narration's
+   * duration, up to Cinematic Avatar's ~15s cap). Small mismatches here
+   * (a second or less) are absorbed with a frozen last-frame pad, not a
+   * loop. If the mismatch is large, this throws — that's a signal to fix
+   * the generation request, not something to silently paper over with a
+   * seam that will read as unclean in the final render.
+   */
+  private async buildCinematicChunk(
+    scene: CinematicSceneInput,
+    chunkIndex: number,
+    tempId: string,
+  ): Promise<string> {
+    const [videoDuration, audioDuration] = await Promise.all([
+      this.getDurationSeconds(scene.cinematicVideoPath),
+      this.getDurationSeconds(scene.narrationAudioPath),
     ]);
+    const chunkPath = path.join(os.tmpdir(), `cinechunk_${tempId}_${chunkIndex}.mp4`);
+
+    const mismatch = audioDuration - videoDuration;
+    const MAX_SILENT_PAD_SECONDS = 1.5; // beyond this, the mismatch should be fixed at generation time, not patched here
+
+    if (mismatch > MAX_SILENT_PAD_SECONDS) {
+      throw new Error(
+        `[FFmpeg] Cinematic chunk ${chunkIndex}: narration (${audioDuration.toFixed(1)}s) exceeds ` +
+        `cinematic video (${videoDuration.toFixed(1)}s) by ${mismatch.toFixed(1)}s — too large to freeze-frame pad ` +
+        `cleanly. Re-request the cinematic clip at the correct duration (or split the narration across ` +
+        `multiple ≤15s cinematic shots) instead of stretching this one.`
+      );
+    }
+
+    // If narration is longer than the video by a small amount, hold the
+    // last frame to cover the gap. tpad with stop_mode=clone repeats the
+    // final frame rather than looping from the start, so there's no seam.
+    const needsFreezePad = mismatch > 0;
+    const targetDuration = Math.max(videoDuration, audioDuration);
+
+    const videoFilter = needsFreezePad
+      ? `[0:v]scale=1080:${CONTENT_H}:force_original_aspect_ratio=increase,crop=1080:${CONTENT_H},setsar=1,fps=25,` +
+        `tpad=stop_mode=clone:stop_duration=${mismatch.toFixed(3)}[bg]`
+      : `[0:v]scale=1080:${CONTENT_H}:force_original_aspect_ratio=increase,crop=1080:${CONTENT_H},setsar=1,fps=25[bg]`;
+
+    await execFileAsync('ffmpeg', [
+      '-y', '-loglevel', 'error',
+      '-i', scene.cinematicVideoPath,
+      '-i', scene.narrationAudioPath,
+      '-filter_complex',
+      // No avatar overlay step here — the cinematic clip already contains
+      // the avatar composited into its environment by HeyGen/Seedance.
+      // Same CONTENT_H / CONTENT_Y_OFFSET math as buildSyncedChunk so this
+      // pads onto the shared canvas identically.
+      `${videoFilter};` +
+      `[bg]pad=${OUTPUT_W}:${OUTPUT_H}:0:${CONTENT_Y_OFFSET}:color=white[v]`,
+      '-map', '[v]',
+      '-map', '1:a',
+      '-t', targetDuration.toFixed(3),
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+      chunkPath,
+    ], { timeout: 180_000, maxBuffer: 50 * 1024 * 1024 });
+
+    console.log(
+      `[FFmpeg] Cinematic chunk ${chunkIndex} composited: video ${videoDuration.toFixed(1)}s, ` +
+      `narration ${audioDuration.toFixed(1)}s${needsFreezePad ? ` (padded +${mismatch.toFixed(1)}s)` : ''}`
+    );
+    return chunkPath;
+  }
+
+  public async buildDynamicSyncedAsset(
+    scenes: DynamicScene[],
+    propertyId: string,
+    overlay: PropertyOverlayData,
+  ): Promise<string> {
+    if (scenes.length === 0) throw new Error('buildDynamicSyncedAsset: no scenes provided');
+
+    const safeId = propertyId.replace(/[^a-zA-Z0-9_-]/g, '');
+    const tempId = `${safeId}_${Date.now()}`;
+    const chunkPaths: string[] = [];
+    const concatListPath = path.join(os.tmpdir(), `concat_${tempId}.txt`);
+    const stitchedPath = path.join(os.tmpdir(), `stitched_${tempId}.mp4`);
+    const outputPath = path.join(os.tmpdir(), `final_synced_${tempId}.mp4`);
+
+    try {
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+        const chunkPath =
+          scene.kind === 'cinematic'
+            ? await this.buildCinematicChunk(scene, i, tempId)
+            : await this.buildSyncedChunk(scene, i, tempId);
+        chunkPaths.push(chunkPath);
+      }
+
+      const listContent = chunkPaths.map((p) => `file '${p}'`).join('\n');
+      await fs.writeFile(concatListPath, listContent);
+      await execFileAsync('ffmpeg', [
+        '-y', '-loglevel', 'error',
+        '-f', 'concat', '-safe', '0', '-i', concatListPath,
+        '-c', 'copy',
+        stitchedPath,
+      ], { timeout: 120_000 });
+
+      const brandingFilter = brandingToVfString(overlay, { headerH: HEADER_H, footerH: FOOTER_H });
+
+      await execFileAsync('ffmpeg', [
+        '-y', '-loglevel', 'error',
+        '-i', stitchedPath,
+        '-vf', brandingFilter,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+        '-c:a', 'copy',
+        outputPath,
+      ], { timeout: 180_000, maxBuffer: 50 * 1024 * 1024 });
+
+      console.log(`[FFmpeg] Dynamic synced render complete: ${outputPath}`);
+      return outputPath;
+    } finally {
+      const sourcePaths = scenes.flatMap((s) =>
+        s.kind === 'cinematic'
+          ? [s.cinematicVideoPath, s.narrationAudioPath]
+          : [s.runwayVideoPath, s.heygenChunkPath]
+      );
+      await Promise.all([
+        ...chunkPaths.map((p) => fs.unlink(p).catch(() => {})),
+        fs.unlink(concatListPath).catch(() => {}),
+        fs.unlink(stitchedPath).catch(() => {}),
+        ...sourcePaths.map((p) => fs.unlink(p).catch(() => {})),
+      ]);
     }
   }
 }

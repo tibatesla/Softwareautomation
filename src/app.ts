@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import webhookRoutes from './routes/webhook.routes';
 import testRoutes from './routes/test.routes';
+import leadRoutes  from './routes/lead.routes';
 import { AuthenticatedRequest } from './middlewares/auth.middleware'; // Needed for req.rawBody typing
 
 const app: Application = express();
@@ -41,6 +42,9 @@ app.use('/api/webhooks', webhookRoutes);
 
 // MOUNT THE TEST ROUTE HERE SO EXPRESS RECOGNIZES IT
 app.use('/api', testRoutes);
+//leads routes
+app.use('/api', leadRoutes);
+
 
 // Fallback for unhandled routes
 app.use((req: Request, res: Response) => {

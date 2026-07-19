@@ -5,6 +5,8 @@ import crypto from 'node:crypto';
 import { handleHeyGenWebhook } from '../controllers/heygen.controller';
 import { handleRespondWebhook } from '../controllers/respond.controller';
 import { handleAdPerformanceWebhook } from '../controllers/ad-performance.controller';
+import { handleLeadVideoLookup } from '../controllers/lead-video.controller';
+
 
 import { AuthenticatedRequest, verifyMakeWebhookToken } from '../middlewares/auth.middleware';
 
@@ -87,3 +89,4 @@ router.post(
 );
 
 export default router;
+

@@ -96,7 +96,24 @@ export const initGhlPollerCron = () => {
             // trim. Empty/missing must become [], not [''] (what
             // ''.split(',') actually produces).
             const imageUrls = props.image_urls
-              ? props.image_urls.split(',').map((url) => url.trim()).filter(Boolean)
+              ? props.image_urls
+                  .split(',')
+                  .map((url) => url.trim())
+                  .filter(Boolean)
+                  .filter((url) => {
+                    // Guards against exactly what happened with "Westlands
+                    // Sky Villa": stray text typed into the field (a
+                    // question, a note, anything not a URL) getting treated
+                    // as an image and crashing the fetch downstream. Only
+                    // keep entries that are actually parseable http(s) URLs.
+                    try {
+                      const parsed = new URL(url);
+                      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+                    } catch {
+                      console.warn(`[GHL Poller] Dropping non-URL entry in image_urls: "${url.slice(0, 60)}..."`);
+                      return false;
+                    }
+                  })
               : [];
             const amenitiesList = props.amenities
               ? props.amenities.split(',').map((item) => item.trim()).filter(Boolean)
@@ -154,7 +171,15 @@ export const initGhlPollerCron = () => {
               .single();
 
             if (dbError || !property) {
-              console.error(`[GHL Poller] DB Upsert Error for GHL Record ${record.id}:`, dbError?.message);
+              if (dbError?.message?.includes('property_unique_id')) {
+                console.error(
+                  `[GHL Poller] Property Id "${upsertPayload.property_unique_id}" is already used by another ` +
+                  `property (GHL Record ${record.id}, "${upsertPayload.property_name}"). ` +
+                  `Go into GHL and change this property's Property Id field to something unique.`
+                );
+              } else {
+                console.error(`[GHL Poller] DB Upsert Error for GHL Record ${record.id}:`, dbError?.message);
+              }
               continue;
             }
 
@@ -177,7 +202,8 @@ export const initGhlPollerCron = () => {
                 await makeService.deployAdCampaign({
                   property_id: property.property_unique_id,
                   gcs_url: property.manual_video_url,
-                  avatar_tag: 'manual_bypass'
+                  avatar_tag: 'manual_bypass',
+                  whatsapp_message: `Hi, I'm interested in ${property.property_name} (Ref: ${property.property_unique_id})`
                 }).catch(err => console.error('[Router] Make.com deployment failed:', err.message));
 
               } else {
@@ -192,9 +218,24 @@ export const initGhlPollerCron = () => {
                   .update({ status: 'RENDERING' })
                   .eq('id', property.id);
 
-                const variants: Array<'Investment' | 'Lifestyle' | 'Architectural'> = [
+                // TEST_SINGLE_VARIANT in .env limits rendering to ONE
+                // variant instead of all 3, for cheap testing. This
+                // replaces manually commenting out array entries in code —
+                // that approach kept getting silently undone every time
+                // this file was replaced during bug fixes. An env var
+                // survives file replacements; a code comment doesn't.
+                // Leave unset (or empty) for real 3-variant production runs.
+                const allVariants: Array<'Investment' | 'Lifestyle' | 'Architectural'> = [
                   'Investment', 'Lifestyle', 'Architectural'
                 ];
+                const testSingle = process.env.TEST_SINGLE_VARIANT as 'Investment' | 'Lifestyle' | 'Architectural' | undefined;
+                const variants = testSingle && allVariants.includes(testSingle)
+                  ? [testSingle]
+                  : allVariants;
+
+                if (testSingle) {
+                  console.log(`[Router] TEST_SINGLE_VARIANT active — only generating ${testSingle} (set to test cheaply; unset in .env for full 3-variant runs).`);
+                }
 
                 for (const variant of variants) {
                   // Pre-create the tracking row so the webhook handler has

@@ -54,9 +54,13 @@ router.post('/test-pipeline', async (req: Request, res: Response): Promise<void>
       property_unique_id: testProperty.property_unique_id
     });
 
-    const variants: Array<'Investment' | 'Lifestyle' | 'Architectural'> = [
+    // Same TEST_SINGLE_VARIANT toggle as the poller — set in .env to
+    // render just one variant for cheap manual testing.
+    const allVariants: Array<'Investment' | 'Lifestyle' | 'Architectural'> = [
       'Investment', 'Lifestyle', 'Architectural'
     ];
+    const testSingle = process.env.TEST_SINGLE_VARIANT as 'Investment' | 'Lifestyle' | 'Architectural' | undefined;
+    const variants = testSingle && allVariants.includes(testSingle) ? [testSingle] : allVariants;
 
     for (const variant of variants) {
       await supabase

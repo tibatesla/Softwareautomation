@@ -9,10 +9,6 @@ export interface VideoScene {
   script: string;
 }
 
-export interface ProcessVideoParams {
-  internal_db_id: string;
-  scenes: VideoScene[];
-}
 
 export interface ProcessVideoParams {
   internal_db_id: number;
@@ -59,18 +55,18 @@ class HeyGenService {
   private readonly personaMatrix: Record<VariantType, PersonaTemplate[]> = {
     Investment: [
       { internal_tag: 'inv_avatar_alpha', avatar_id: '27ee7bdcf0e3442f8fee7dd48618a895', voice_id: '330290724a1b470fb63153f34d4c0183' },
-      { internal_tag: 'inv_avatar_beta', avatar_id: '27ee7bdcf0e3442f8fee7dd48618a895', voice_id: '330290724a1b470fb63153f34d4c0183' },
-      { internal_tag: 'inv_avatar_gamma', avatar_id: '27ee7bdcf0e3442f8fee7dd48618a895', voice_id: '330290724a1b470fb63153f34d4c0183' },
+      { internal_tag: 'inv_avatar_beta', avatar_id: 'ee7bdcf0e3442f8fee7dd48618a895', voice_id: '0290724a1b470fb63153f34d4c0183' },
+      { internal_tag: 'inv_avatar_gamma', avatar_id: 'ee7bdcf0e3442f8fee7dd48618a895', voice_id: '0290724a1b470fb63153f34d4c0183' },
     ],
     Lifestyle: [
-      { internal_tag: 'life_avatar_alpha', avatar_id: '27ee7bdcf0e3442f8fee7dd48618a895', voice_id: '330290724a1b470fb63153f34d4c0183' },
-      { internal_tag: 'life_avatar_beta', avatar_id: '27ee7bdcf0e3442f8fee7dd48618a895', voice_id: '330290724a1b470fb63153f34d4c0183' },
-      { internal_tag: 'life_avatar_gamma', avatar_id: '27ee7bdcf0e3442f8fee7dd48618a895', voice_id: '330290724a1b470fb63153f34d4c0183' },
+      { internal_tag: 'life_avatar_alpha', avatar_id: 'ee7bdcf0e3442f8fee7dd48618a895', voice_id: '0290724a1b470fb63153f34d4c0183' },
+      { internal_tag: 'life_avatar_beta', avatar_id: 'ee7bdcf0e3442f8fee7dd48618a895', voice_id: '0290724a1b470fb63153f34d4c0183' },
+      { internal_tag: 'life_avatar_gamma', avatar_id: 'ee7bdcf0e3442f8fee7dd48618a895', voice_id: '0290724a1b470fb63153f34d4c0183' },
     ],
     Architectural: [
-      { internal_tag: 'arch_avatar_alpha', avatar_id: '27ee7bdcf0e3442f8fee7dd48618a895', voice_id: '330290724a1b470fb63153f34d4c0183' },
-      { internal_tag: 'arch_avatar_beta', avatar_id: '27ee7bdcf0e3442f8fee7dd48618a895', voice_id: '330290724a1b470fb63153f34d4c0183' },
-      { internal_tag: 'arch_avatar_gamma', avatar_id: '27ee7bdcf0e3442f8fee7dd48618a895', voice_id: '330290724a1b470fb63153f34d4c0183' },
+      { internal_tag: 'arch_avatar_alpha', avatar_id: 'ee7bdcf0e3442f8fee7dd48618a895', voice_id: '0290724a1b470fb63153f34d4c0183' },
+      { internal_tag: 'arch_avatar_beta', avatar_id: 'ee7bdcf0e3442f8fee7dd48618a895', voice_id: '0290724a1b470fb63153f34d4c0183' },
+      { internal_tag: 'arch_avatar_gamma', avatar_id: 'ee7bdcf0e3442f8fee7dd48618a895', voice_id: '0290724a1b470fb63153f34d4c0183' },
     ]
   };
 

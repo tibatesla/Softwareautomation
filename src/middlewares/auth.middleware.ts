@@ -31,8 +31,8 @@ export const verifyMakeWebhookToken = (req: Request, res: Response, next: NextFu
 
   if (!token || token !== expectedToken) {
     // TEMP DEBUG — REMOVE after this works; logs lengths not full secrets
-    //console.warn(`[Auth Debug] stripped token len=${token.length} vs expected len=${expectedToken.length}, equal=${token === expectedToken}`);
-    //console.warn('[Security Firewall] 401 Blocked: Unauthorized Make.com intercept.');
+    console.warn(`[Auth Debug] stripped token len=${token.length} vs expected len=${expectedToken.length}, equal=${token === expectedToken}`);
+    console.warn('[Security Firewall] 401 Blocked: Unauthorized Make.com intercept.');
     res.status(401).json({ error: 'Unauthorized webhook intercept: Invalid or missing token' });
     return;
   }

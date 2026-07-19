@@ -6,6 +6,15 @@
 // bedroom-first, any order works. This is the real "voice matches visuals"
 // mechanism, and it is genuinely ML-driven (vision model classification),
 // which is exactly what the client asked for.
+//
+// CINEMATIC ADDITION: the opening scene (i === 0) is now marked
+// isCinematic: true and gets a director-style cinematicPrompt instead of
+// (in addition to) the usual runwayPrompt. This is the "avatar walking
+// into the property" shot the client asked for — kept to ONE scene per
+// variant deliberately, since Cinematic Avatar bills a flat 60-150 credits
+// per shot regardless of length, unlike the per-minute talking-avatar cost.
+// Making every scene cinematic would multiply cost by scene count, not
+// duration — see video-orchestrator.service.ts's cost comment.
 
 import { analyzeAllPhotos, PhotoAnalysis } from './photo-vision.service';
 
@@ -15,6 +24,8 @@ export interface ScenePlan {
   photoUrl: string;
   runwayPrompt: string;
   script: string;
+  isCinematic: boolean;
+  cinematicPrompt?: string; // only set when isCinematic is true
 }
 
 interface PropertyData {
@@ -96,6 +107,31 @@ const MOTION_BY_ROOM: Record<string, string> = {
   default: 'Slow smooth cinematic camera push forward through the space, gentle parallax, photorealistic, steady motion, no people, no text',
 };
 
+/**
+ * Builds a director-style prompt for the Cinematic Avatar (Seedance) shot —
+ * scene, action, camera, and mood, per HeyGen's own prompting guidance.
+ * This REPLACES the script for this one scene (Cinematic Avatar has no
+ * script/voice_id param) — the script text is still generated separately
+ * via TTS in video-orchestrator, so narration content stays consistent
+ * with the rest of the variant's tone even though the visual is generated
+ * differently.
+ */
+function buildCinematicPrompt(roomType: string, propertyName: string): string {
+  const roomDescriptions: Record<string, string> = {
+    exterior: `the entrance of ${propertyName}`,
+    'living room': 'a bright, modern living room',
+    kitchen: 'a modern kitchen',
+    bedroom: 'a spacious bedroom',
+    'swimming pool': 'a poolside area',
+  };
+  const setting = roomDescriptions[roomType] || `a space inside ${propertyName}`;
+
+  return (
+    `The presenter walks slowly into ${setting}, gesturing naturally toward the space. ` +
+    `Tracking shot from the side, medium distance, documentary style, warm natural lighting, photorealistic.`
+  );
+}
+
 export async function buildScenePlan(
   property: PropertyData,
   photoUrls: string[],
@@ -105,7 +141,8 @@ export async function buildScenePlan(
   const location = property.specific_location || 'Nairobi';
   const price = fmtPrice(property.price_min ?? property.price, property.price_max ?? property.price);
 
-  const photos = photoUrls.slice(0, 4);
+  const photos = photoUrls.slice(0, 6); //it only shows 6 images url an ad longer losses viewrs easylt
+  //const photos = photoUrls;
 
   console.log(`[ScenePlanner] Analyzing ${photos.length} photos with vision model...`);
   const analyses: PhotoAnalysis[] = await analyzeAllPhotos(photos);
@@ -133,8 +170,15 @@ export async function buildScenePlan(
 
     const runwayPrompt = MOTION_BY_ROOM[analysis.roomType] || MOTION_BY_ROOM.default;
 
-    console.log(`[ScenePlanner] Scene ${i + 1}: detected "${analysis.roomType}" → matched script generated.`);
+    // Deliberately only the opening scene is cinematic — see file header
+    // comment on cost. Orchestrator still checks USE_CINEMATIC_AVATAR
+    // before actually acting on this flag, so this stays inert until
+    // that's turned on.
+    const isCinematic = i === 0;
+    const cinematicPrompt = isCinematic ? buildCinematicPrompt(analysis.roomType, name) : undefined;
 
-    return { photoUrl, runwayPrompt, script };
+    console.log(`[ScenePlanner] Scene ${i + 1}: detected "${analysis.roomType}" → matched script generated.${isCinematic ? ' (cinematic opener)' : ''}`);
+
+    return { photoUrl, runwayPrompt, script, isCinematic, cinematicPrompt };
   });
 }

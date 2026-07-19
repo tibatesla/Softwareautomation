@@ -91,6 +91,7 @@ async function processCompletedVariant(
       property_id: `${propertyRecord.property_unique_id}_${variantRow.variant}`,
       gcs_url: finalVideoUrl,
       avatar_tag: extractedTag,
+      whatsapp_message: `Hi, I'm interested in ${propertyRecord.property_name} (Ref: ${propertyRecord.property_unique_id})`
     })
     .catch((err) => console.error(`[Stage 5 Handoff Error - ${variantRow.variant}]`, err));
 

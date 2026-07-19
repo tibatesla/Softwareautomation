@@ -37,9 +37,13 @@ export class HeygenChunkService {
       body: JSON.stringify({
         video_inputs: [
           {
+            // FIX: was `persona.avatarId` — `persona` doesn't exist in this
+            // scope, only in video-orchestrator.service.ts. This threw
+            // ReferenceError on every call. Use the params passed in, same
+            // as the (correct) commented-out line above it.
             character: { type: 'avatar', avatar_id: params.avatarId, avatar_style: 'normal' },
             voice: { type: 'text', input_text: params.script, voice_id: params.voiceId },
-            background: { type: 'color', value: '#FFFFFF' },
+            background: { type: 'color', value: '#00FF00' },
           },
         ],
         dimension: { width: 1280, height: 720 }, // audio is what matters; smaller = faster render

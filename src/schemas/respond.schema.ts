@@ -7,9 +7,12 @@ export const respondWebhookSchema = z.object({
   name: z.string().optional(),
   property_id: z.string().min(1),
   qualification_data: z.object({
-  investment_type: z.string().min(1, "Investment type is required"),
-  budget_envelope: z.string().min(1, "Budget is required")
-}),
+    // transaction_type added 2026-07-18 — Investment/Lifestyle/Architectural
+    transaction_type: z.string().min(1, "Transaction type (buy/rent) is required"),
+investment_type: z.string().min(1, "Investment type is required"),
+budget_envelope: z.string().min(1, "Budget is required")
+    
+  }),
   tags: z.array(z.string()).default([]),
 });
 
