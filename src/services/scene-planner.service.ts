@@ -141,7 +141,7 @@ export async function buildScenePlan(
   const location = property.specific_location || 'Nairobi';
   const price = fmtPrice(property.price_min ?? property.price, property.price_max ?? property.price);
 
-  const photos = photoUrls.slice(0, 6); //it only shows 6 images url an ad longer losses viewrs easylt
+  const photos = photoUrls.slice(0, 10); //it only shows 6 images url an ad longer losses viewrs easylt
   //const photos = photoUrls;
 
   console.log(`[ScenePlanner] Analyzing ${photos.length} photos with vision model...`);
@@ -174,8 +174,11 @@ export async function buildScenePlan(
     // comment on cost. Orchestrator still checks USE_CINEMATIC_AVATAR
     // before actually acting on this flag, so this stays inert until
     // that's turned on.
+    //const isCinematic = true;
+    //const cinematicPrompt = buildCinematicPrompt(analysis.roomType, name);
     const isCinematic = i === 0;
-    const cinematicPrompt = isCinematic ? buildCinematicPrompt(analysis.roomType, name) : undefined;
+const cinematicPrompt = isCinematic ? buildCinematicPrompt(analysis.roomType, name) : undefined;
+    //const cinematicPrompt = isCinematic ? buildCinematicPrompt(analysis.roomType, name) : undefined;
 
     console.log(`[ScenePlanner] Scene ${i + 1}: detected "${analysis.roomType}" → matched script generated.${isCinematic ? ' (cinematic opener)' : ''}`);
 

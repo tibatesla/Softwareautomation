@@ -38,8 +38,11 @@ export interface PersonaTemplate {
 // TEST_SINGLE_VARIANT — nothing to forget, nothing that can be picked by
 // accident.
 export const PERSONAS: Record<VariantType, PersonaTemplate[]> = {
-  Investment: [
-    { internal_tag: 'inv_avatar_alpha', avatar_id: '954565cb9e1e4ccc8b874d3c00db851f', voice_id: '0516c2d857eb425c94e90b068241914e' },
+Investment: [
+  { internal_tag: 'inv_avatar_alpha', avatar_id: 'ba362f07e6324520b4c6e3646be429c7', voice_id: '007e1378fc454a9f976db570ba6164a7' },
+
+
+  // ...
     // { internal_tag: 'inv_avatar_beta', avatar_id: 'REPLACE_ME', voice_id: 'REPLACE_ME' },
     // { internal_tag: 'inv_avatar_gamma', avatar_id: 'REPLACE_ME', voice_id: 'REPLACE_ME' },
   ],

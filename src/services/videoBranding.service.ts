@@ -1,17 +1,6 @@
 // src/services/videoBranding.service.ts
 //
-// Single source of truth for the on-video branding overlay (header bar,
-// price/unit/location info band, footer CTA). Both buildVerticalBrandedAsset
-// and buildDynamicSyncedAsset call into this so the two renders can't drift
-// out of sync — they already had bugs from duplicating this logic
-// independently:
-//   1. Price sitting too close to the header — 18px, then 40px margin still
-//      LOOKED connected to the navy header at real viewing scale (a 40px
-//      gap on a 1920px-tall frame is only ~2% of the height — reads as
-//      nearly touching on an actual phone screen). Now 80px.
-//   2. Footer bg/text colors were inverted between the two functions
-//   3. Watermark text was white on a navy footer — invisible. Now gold,
-//      matching the header brand color, still subtle via opacity.
+
 
 export interface PropertyOverlayData {
   price: string;
@@ -43,13 +32,7 @@ export function escapeDrawtext(text: string): string {
     .replace(/%/g, '\\%');
 }
 
-/**
- * Returns the branding overlay as an ordered list of *unlabeled* drawtext/
- * drawbox filter expressions (no [in]/[out] brackets). Callers wrap these
- * for their own graph — either a flat comma-joined -vf string via
- * brandingToVfString(), or chained labels inside a larger -filter_complex
- * graph via chainBrandingLabels().
- */
+
 export function buildBrandingOps(
   overlay: PropertyOverlayData,
   layout: BrandingLayout = DEFAULT_BRANDING_LAYOUT,
@@ -81,7 +64,7 @@ export function buildBrandingOps(
 
     // --- Footer ---
     `drawbox=x=0:y=h-${footerH}:w=iw:h=${footerH}:color=${NAVY}@1:t=fill`,
-    `drawtext=${FONT}:text='Structured Property Solution':fontcolor=${GOLD}:fontsize=48:x=(w-tw)/2:y=h-190`,
+   // `drawtext=${FONT}:text='Structured Property Solution':fontcolor=${GOLD}:fontsize=48:x=(w-tw)/2:y=h-190`,
     `drawtext=${FONT}:text='High Returns on your investment.':fontcolor=white:fontsize=36:x=(w-tw)/2:y=h-125`,
     // Watermark: was white@0.55 on a navy background — invisible (white on
     // navy with only 55% opacity barely shows). Gold matches the header's

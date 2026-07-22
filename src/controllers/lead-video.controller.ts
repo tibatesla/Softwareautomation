@@ -48,6 +48,9 @@ interface LeadVideoSuccessResponse {
   variant: VariantName;
   video_url: string;
   matched_by: 'property_id' | 'location' | 'fallback_most_recent';
+  brochure_url: string | null;        // not built yet
+  neighborhood_guide_url: string | null; // depends on location_videos table — not built yet
+  unit_layout_url: string | null;     // "floor plans" — client needs to clarify scope, see below
 }
 
 interface LeadVideoErrorResponse {
@@ -225,6 +228,9 @@ export const handleLeadVideoLookup = async (
       variant: variantRow.variant,
       video_url: variantRow.video_url,
       matched_by: matchedBy,
+      brochure_url: null,
+      neighborhood_guide_url: null,
+      unit_layout_url: null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

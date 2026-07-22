@@ -50,6 +50,42 @@ const CHESTONE_PRESENTER_AVATAR_ID = process.env.CHESTONE_PRESENTER_AVATAR_ID;
 // in personas.service.ts — single source of truth, see that file's header
 // comment for why this used to be duplicated across two files.
 
+// Add near the top of video-orchestrator.service.ts, alongside other helpers
+
+const WORDS_PER_SECOND = 2.3; // rough natural-speech estimate
+const MAX_SHOT_SECONDS = 15;
+const MIN_SHOT_SECONDS = 4;
+
+function estimateSeconds(text: string): number {
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.ceil(wordCount / WORDS_PER_SECOND);
+}
+
+/**
+ * Splits a script into sentence-based chunks, each estimated to fit within
+ * MAX_SHOT_SECONDS. Greedy: keeps adding sentences to the current chunk
+ * until adding the next one would exceed the cap, then starts a new chunk.
+ * A single sentence longer than the cap on its own still gets its own
+ * chunk (better to slightly overrun one shot than silently drop content).
+ */
+function splitScriptForCinematic(script: string): string[] {
+  const sentences = script.match(/[^.!?]+[.!?]+/g) || [script];
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const sentence of sentences) {
+    const candidate = (current + ' ' + sentence).trim();
+    if (current && estimateSeconds(candidate) > MAX_SHOT_SECONDS) {
+      chunks.push(current.trim());
+      current = sentence.trim();
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) chunks.push(current.trim());
+  return chunks;
+}
+
 export interface ProduceVariantParams {
   internal_db_id: number;
   variant: VariantType;
@@ -102,18 +138,44 @@ export class VideoOrchestrator {
         const useCinematicForThisScene = USE_CINEMATIC_AVATAR && scene.isCinematic && CHESTONE_PRESENTER_AVATAR_ID;
 
         if (useCinematicForThisScene) {
-          console.log(`[Orchestrator] [${variant}] Scene ${i + 1}/${scenes.length}: cinematic shot + narration in parallel...`);
-          const [cinematicVideoPath, narrationAudioPath] = await Promise.all([
-            generateCinematicShot({
-              prompt: scene.cinematicPrompt!,
-              avatarId: CHESTONE_PRESENTER_AVATAR_ID!,
-              durationSeconds: 10,
-              resolution: '1080p',
-            }),
-            generateNarrationAudio(scene.script, persona.voice_id),
-          ]);
-          sceneAssets.push({ kind: 'cinematic', cinematicVideoPath, narrationAudioPath });
-        } else {
+  const totalEstimate = estimateSeconds(scene.script);
+
+  if (totalEstimate <= MAX_SHOT_SECONDS) {
+    const shotSeconds = Math.min(Math.max(totalEstimate, MIN_SHOT_SECONDS), MAX_SHOT_SECONDS);
+    console.log(`[Orchestrator] [${variant}] Scene ${i + 1}/${scenes.length}: cinematic shot + narration in parallel (${shotSeconds}s)...`);
+
+    const [cinematicVideoPath, narrationAudioPath] = await Promise.all([
+      generateCinematicShot({
+        prompt: scene.cinematicPrompt!,
+        avatarId: CHESTONE_PRESENTER_AVATAR_ID!,
+        durationSeconds: shotSeconds,
+        resolution: '1080p',
+      }),
+      generateNarrationAudio(scene.script, persona.voice_id),
+    ]);
+    sceneAssets.push({ kind: 'cinematic', cinematicVideoPath, narrationAudioPath });
+
+  } else {
+    const chunks = splitScriptForCinematic(scene.script);
+    console.log(`[Orchestrator] [${variant}] Scene ${i + 1}/${scenes.length}: cinematic script needs ${totalEstimate}s — splitting into ${chunks.length} shots (cost: ${chunks.length}x cinematic credits for this scene).`);
+
+    for (let c = 0; c < chunks.length; c++) {
+      const chunkSeconds = Math.min(Math.max(estimateSeconds(chunks[c]), MIN_SHOT_SECONDS), MAX_SHOT_SECONDS);
+      console.log(`[Orchestrator] [${variant}] Scene ${i + 1}, cinematic part ${c + 1}/${chunks.length} (${chunkSeconds}s)...`);
+
+      const [cinematicVideoPath, narrationAudioPath] = await Promise.all([
+        generateCinematicShot({
+          prompt: scene.cinematicPrompt!,
+          avatarId: CHESTONE_PRESENTER_AVATAR_ID!,
+          durationSeconds: chunkSeconds,
+          resolution: '1080p',
+        }),
+        generateNarrationAudio(chunks[c], persona.voice_id),
+      ]);
+      sceneAssets.push({ kind: 'cinematic', cinematicVideoPath, narrationAudioPath });
+    }
+  }
+} else {
           console.log(`[Orchestrator] [${variant}] Scene ${i + 1}/${scenes.length}: generating voice + visuals in parallel...`);
           const [heygenChunkPath, runwayVideoPath] = await Promise.all([
             heygenChunkService.generateVoiceChunk({

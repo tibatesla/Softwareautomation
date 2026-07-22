@@ -3,6 +3,7 @@ import cron from 'node-cron';
 import { supabase } from '../services/supabase.service';
 import { videoGenerationQueue } from '../config/queue.config';
 import { makeService } from '../services/make.service';
+import { ensureLocationVideoQueued } from '../services/location-video.service';
 
 const GHL_API_TOKEN = process.env.GHL_API_TOKEN;
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
@@ -119,7 +120,7 @@ export const initGhlPollerCron = () => {
               ? props.amenities.split(',').map((item) => item.trim()).filter(Boolean)
               : [];
 
-            // CRITICAL FIX: check if this record already exists BEFORE
+            // Cif this record already exists BEFORE
             // upserting. The old code always wrote status from GHL's data
             // on every cycle — but GHL's own copy of status never changes
             // (nothing writes RENDERING/COMPLETED back to GHL), so every
@@ -184,6 +185,12 @@ export const initGhlPollerCron = () => {
             }
 
             totalProcessed += 1;
+
+//if (!existingRecord) {
+ // ensureLocationVideoQueued(property.specific_location).catch((err: any) =>
+   //console.error(`[GHL Poller] Location video queue failed for ${property.specific_location}:`, err.message)
+ // );
+//}
 
             // Only route items sitting in 'PENDING_INGESTION' — anything
             // already RENDERING/COMPLETED/FAILED was handled on a prior cycle.
