@@ -1,21 +1,10 @@
 // src/scripts/manual-photo-assembly.ts
 //
-// Manually assembles the saved 15s cinematic entrance + real property
-// photos, each with its own narration, into one video. Only cost here is
-// cheap Starfish TTS (fractions of a cent) — no HeyGen video, no Runway.
-//
-// FIX HISTORY:
-// 1. Entrance now uses the saved Aria narration (entrance_narration.mp3)
-//    instead of the raw HeyGen clip's own baked-in audio track — previously
-//    the entrance used HeyGen's own default voice while every room used
-//    Aria, which is why it sounded like two different presenters.
-// 2. Entrance video is now TRIMMED to match the narration's actual length
-//    (13.37s) instead of playing the full 15.09s clip — the extra ~1.7s
-//    was silent dead air after the narration finished, which is what
-//    caused the audible gap before the kitchen scene. A large crossfade
-//    was tried as a fix first but caused voices to overlap audibly on the
-//    short room clips — trimming the source is the correct fix, not
-//    masking the gap after the fact.
+// Near-zero-cost full property test — no Runway, no Cinematic Avatar.
+// Uses real property photos + HeyGen TTS narration (fractions of a cent)
+// + FFmpeg zoompan for local, free simulated camera movement. Tests the
+// full script generation + new intro/outro branding together on real
+// content, without touching either paid video-generation API.
 //
 // Run with: npx ts-node src/scripts/manual-photo-assembly.ts
 
@@ -29,51 +18,36 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { generateNarrationAudio } from '../services/cinematic-avatar.service';
 import { selectOptimalPersona } from '../services/personas.service';
+import { brandingToVfString } from '../services/videoBranding.service';
 
 const execFileAsync = promisify(execFile);
 
-const ENTRANCE_VIDEO = '/home/tesla/chestone-pipeline/saved-cinematic/entrance_shot.mp4';
-const ENTRANCE_AUDIO = '/home/tesla/chestone-pipeline/saved-cinematic/entrance_narration.mp3';
 const OUTPUT_DIR = '/home/tesla/chestone-pipeline/sample-output';
-const OUTPUT_FILE = path.join(OUTPUT_DIR, 'lucky_inn_manual_assembly.mp4');
-
-const LISTING = {
-  price: 'Price on Request',
-  bedInfo: '3 Bedroom Platinium',
-  location: 'Westlands, Nairobi',
- // tagline: 'Structured Property Solution',
-  company: 'Chestone Properties Ltd',
-};
-
-const ROOMS: { url: string; script: string }[] = [
-  { url: 'https://assets.cdn.filesafe.space/gZq4AjxCqZKGYlYZXFjB/media/6a5387b8c8fd689c35026cfe.jpeg', script: 'A modern kitchen with glossy cabinetry and quality finishes.' },
-  { url: 'https://assets.cdn.filesafe.space/gZq4AjxCqZKGYlYZXFjB/media/6a5387fa9c9b37b5fdbcee23.jpeg', script: 'Spacious bedrooms with large floor-to-ceiling windows.' },
-  { url: 'https://assets.cdn.filesafe.space/gZq4AjxCqZKGYlYZXFjB/media/6a536afe708c41d4df1e437e.jpeg', script: 'Premium bathroom finishes with glass shower enclosures.' },
-  { url: 'https://assets.cdn.filesafe.space/gZq4AjxCqZKGYlYZXFjB/media/6a58c1eb9c9b37b5fd159a9d.jpeg', script: 'Resort-grade amenities including this swimming pool.' },
-];
+const OUTPUT_FILE = path.join(OUTPUT_DIR, 'photo_assembly_test.mp4');
 
 const OUTPUT_W = 1080;
 const OUTPUT_H = 1920;
 const FPS = 25;
 const MIN_HOLD_SECONDS = 3;
-const CROSSFADE_SECONDS = 0.15;
+const OUTRO_SECONDS = 3;
 
-const FONT_BOLD = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
-const FONT_REGULAR = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+// Fill in real property photo URLs + matching scripts. Reuse ROOM_LINES
+// tone from scene-planner.service.ts for consistency, or write custom.
+const ROOMS: { url: string; script: string }[] = [
+  { url: 'https://assets.cdn.filesafe.space/gZq4AjxCqZKGYlYZXFjB/media/6a56b60b1097b81195e00069.jpeg', script: 'A modern kitchen with glossy cabinetry and quality finishes.' },
+  { url: 'https://assets.cdn.filesafe.space/gZq4AjxCqZKGYlYZXFjB/media/6a5387fa9c9b37b5fdbcee23.jpeg', script: 'Spacious bedrooms with large floor-to-ceiling windows.' },
+  { url: 'https://assets.cdn.filesafe.space/gZq4AjxCqZKGYlYZXFjB/media/6a536afe708c41d4df1e437e.jpeg', script: 'Premium bathroom finishes with glass shower enclosures.' },
+  { url: 'https://assets.cdn.filesafe.space/gZq4AjxCqZKGYlYZXFjB/media/6a58c1eb9c9b37b5fd159a9d.jpeg', script: 'Resort-grade amenities including this swimming pool.' },
+];
 
-const NAVY = '0x0B2545';
-const GOLD = '0xC9A227';
+const OVERLAY = {
+  price: 'KES 22.5M - 23.9M',
+  location: 'Westlands, Nairobi',
+  unitType: '3 Bedroom Platinium',
+};
 
-function escapeDrawtext(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/:/g, '\\:')
-    .replace(/'/g, "\\'")
-    .replace(/%/g, '\\%');
-}
-
-async function downloadToTemp(url: string, prefix: string, ext: string): Promise<string> {
-  const tempPath = path.join(os.tmpdir(), `${prefix}_${Date.now()}.${ext}`);
+async function downloadToTemp(url: string, prefix: string): Promise<string> {
+  const tempPath = path.join(os.tmpdir(), `${prefix}_${Date.now()}.jpg`);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to download ${url}: ${res.statusText}`);
   const buf = await res.arrayBuffer();
@@ -93,24 +67,14 @@ async function main() {
     throw new Error('Fill in ROOMS (url + script per photo) before running this script.');
   }
 
-  try {
-    await fs.access(ENTRANCE_AUDIO);
-  } catch {
-    throw new Error(
-      `Entrance narration file not found at ${ENTRANCE_AUDIO}. ` +
-      `This should have been saved alongside entrance_shot.mp4 during the ` +
-      `original build-avatar-samples.ts run — check that directory.`
-    );
-  }
-
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
   const persona = await selectOptimalPersona('Investment');
 
-  console.log(`[Manual] Downloading ${ROOMS.length} photos + generating narration...`);
+  console.log(`[Test] Downloading ${ROOMS.length} photos + generating narration (TTS only, near-free)...`);
   const roomAssets = await Promise.all(
     ROOMS.map(async (room, i) => {
       const [photoPath, audioPath] = await Promise.all([
-        downloadToTemp(room.url, `photo${i}`, 'jpg'),
+        downloadToTemp(room.url, `photo${i}`),
         generateNarrationAudio(room.script, persona.voice_id),
       ]);
       const audioDuration = await getDurationSeconds(audioPath);
@@ -119,111 +83,83 @@ async function main() {
     })
   );
 
-  const entranceVideoDuration = await getDurationSeconds(ENTRANCE_VIDEO);
-  const entranceAudioDuration = await getDurationSeconds(ENTRANCE_AUDIO);
-  const entranceUseDuration = Math.min(entranceVideoDuration, entranceAudioDuration);
-  if (entranceAudioDuration > entranceVideoDuration) {
-    console.warn(
-      `[Manual] WARNING: entrance narration (${entranceAudioDuration.toFixed(1)}s) is LONGER than ` +
-      `the entrance video (${entranceVideoDuration.toFixed(1)}s). Narration will be cut off at ` +
-      `${entranceUseDuration.toFixed(1)}s. Consider regenerating the cinematic shot at a longer duration.`
-    );
-  } else {
-    console.log(
-      `[Manual] Trimming entrance to ${entranceUseDuration.toFixed(2)}s (narration length) — ` +
-      `removes ${(entranceVideoDuration - entranceAudioDuration).toFixed(2)}s of silent dead air ` +
-      `that was at the end of the raw video.`
-    );
-  }
-
-  const inputs: string[] = ['-i', ENTRANCE_VIDEO, '-i', ENTRANCE_AUDIO];
+  // Build raw (unbranded) video: photos with local FFmpeg zoompan, no
+  // Runway, no Cinematic Avatar — just real photos + narration.
+  const rawPath = path.join(os.tmpdir(), `raw_assembly_${Date.now()}.mp4`);
+  const inputs: string[] = [];
   roomAssets.forEach((r) => {
-    inputs.push('-loop', '1', '-i', r.photoPath);
+    inputs.push('-loop', '1', '-t', String(r.holdSeconds), '-i', r.photoPath);
   });
   roomAssets.forEach((r) => {
     inputs.push('-i', r.audioPath);
   });
 
   const filterParts: string[] = [];
-  filterParts.push(
-    `[0:v]trim=duration=${entranceUseDuration.toFixed(3)},setpts=PTS-STARTPTS,` +
-    `scale=${OUTPUT_W}:${OUTPUT_H}:force_original_aspect_ratio=increase,crop=${OUTPUT_W}:${OUTPUT_H},setsar=1,fps=${FPS}[v0]`
-  );
-  const PHOTO_INPUT_OFFSET = 2;
   roomAssets.forEach((r, i) => {
     const frames = Math.round(r.holdSeconds * FPS);
     filterParts.push(
-      `[${PHOTO_INPUT_OFFSET + i}:v]scale=${OUTPUT_W}:${OUTPUT_H}:force_original_aspect_ratio=increase,crop=${OUTPUT_W}:${OUTPUT_H},setsar=1,` +
-      `zoompan=z='min(zoom+0.0012,1.1)':d=${frames}:s=${OUTPUT_W}x${OUTPUT_H}:fps=${FPS},` +
-      `trim=duration=${r.holdSeconds.toFixed(3)},setpts=PTS-STARTPTS[v${i + 1}]`
+      `[${i}:v]scale=${OUTPUT_W}:${OUTPUT_H}:force_original_aspect_ratio=increase,crop=${OUTPUT_W}:${OUTPUT_H},setsar=1,` +
+      `zoompan=z='min(zoom+0.0012,1.1)':d=${frames}:s=${OUTPUT_W}x${OUTPUT_H}:fps=${FPS}[v${i}]`
     );
   });
-  const videoLabels = ['[v0]', ...roomAssets.map((_, i) => `[v${i + 1}]`)].join('');
-  filterParts.push(`${videoLabels}concat=n=${roomAssets.length + 1}:v=1:a=0[concatv]`);
+  const videoLabels = roomAssets.map((_, i) => `[v${i}]`).join('');
+  filterParts.push(`${videoLabels}concat=n=${roomAssets.length}:v=1:a=0[outv]`);
 
-  const headerBarH = 230;
-  const priceBandH = 140;
-  const footerBarY = OUTPUT_H - 190;
-  const footerBarH = 190;
-
-  filterParts.push(
-    `[concatv]` +
-    `drawbox=x=0:y=0:w=${OUTPUT_W}:h=${headerBarH}:color=${NAVY}@1:t=fill,` +
-    `drawbox=x=0:y=${headerBarH}:w=${OUTPUT_W}:h=${priceBandH}:color=white@1:t=fill,` +
-    `drawtext=fontfile=${FONT_BOLD}:text='${escapeDrawtext(LISTING.price)}':fontsize=54:fontcolor=${NAVY}:x=40:y=${headerBarH + 20},` +
-    `drawtext=fontfile=${FONT_BOLD}:text='${escapeDrawtext(LISTING.bedInfo)}':fontsize=34:fontcolor=${NAVY}:x=40:y=${headerBarH + 85},` +
-    `drawtext=fontfile=${FONT_REGULAR}:text='${escapeDrawtext(LISTING.location)}':fontsize=26:fontcolor=gray:x=40:y=${headerBarH + 120},` +
-    `drawbox=x=0:y=${footerBarY}:w=${OUTPUT_W}:h=${footerBarH}:color=white@1:t=fill,` +
-    //`drawtext=fontfile=${FONT_BOLD}:text='${escapeDrawtext(LISTING.tagline)}':fontsize=40:fontcolor=${GOLD}:x=(w-text_w)/2:y=${footerBarY + 30},` +
-    `drawtext=fontfile=${FONT_REGULAR}:text='${escapeDrawtext(LISTING.company)}':fontsize=22:fontcolor=${NAVY}:x=(w-text_w)/2:y=${footerBarY + 90}` +
-    `[outv]`
-  );
-
-  filterParts.push(
-    `[1:a]atrim=0:${entranceUseDuration.toFixed(3)},asetpts=PTS-STARTPTS[aEntrance]`
-  );
-  const audioInputOffset = PHOTO_INPUT_OFFSET + roomAssets.length;
+  const audioOffset = roomAssets.length;
   roomAssets.forEach((r, i) => {
-    filterParts.push(`[${audioInputOffset + i}:a]apad=pad_dur=${(r.holdSeconds).toFixed(3)},atrim=0:${r.holdSeconds.toFixed(3)}[aRoom${i}]`);
+    filterParts.push(`[${audioOffset + i}:a]apad=pad_dur=${r.holdSeconds.toFixed(3)},atrim=0:${r.holdSeconds.toFixed(3)}[a${i}]`);
   });
+  const audioLabels = roomAssets.map((_, i) => `[a${i}]`).join('');
+  filterParts.push(`${audioLabels}concat=n=${roomAssets.length}:v=0:a=1[outa]`);
 
-  let prevLabel = 'aEntrance';
-  roomAssets.forEach((r, i) => {
-    const outLabel = i === roomAssets.length - 1 ? 'outa' : `xf${i}`;
-    filterParts.push(
-      `[${prevLabel}][aRoom${i}]acrossfade=d=${CROSSFADE_SECONDS}:c1=tri:c2=tri[${outLabel}]`
-    );
-    prevLabel = outLabel;
-  });
-
-  const outputTemp = path.join(os.tmpdir(), `manual_output_${Date.now()}.mp4`);
-  const args = [
-    '-y', '-loglevel', 'error',
+  await execFileAsync('ffmpeg', [
+    '-y', '-hide_banner', '-loglevel', 'error',
     ...inputs,
     '-filter_complex', filterParts.join(';'),
-    '-map', '[outv]',
-    '-map', '[outa]',
+    '-map', '[outv]', '-map', '[outa]',
     '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
     '-c:a', 'aac', '-b:a', '128k',
-    outputTemp,
-  ];
+    rawPath,
+  ], { timeout: 180_000, maxBuffer: 1024 * 1024 * 1024 });
 
-  console.log('[Manual] Assembling with FFmpeg (video + narration + overlay)...');
-  await execFileAsync('ffmpeg', args, { timeout: 180_000, maxBuffer: 50 * 1024 * 1024 });
+  console.log('[Test] Raw assembly done. Applying new intro/outro branding...');
 
-  await fs.copyFile(outputTemp, OUTPUT_FILE);
-  console.log(`[Manual] Done: ${OUTPUT_FILE}`);
+  // Extend with frozen last frame for outro, THEN brand — same two-step
+  // pattern as test-branding-only.ts, applied to genuinely fresh footage
+  // this time (not a pre-branded old video).
+  const originalDuration = await getDurationSeconds(rawPath);
+  const totalDuration = originalDuration + OUTRO_SECONDS;
+  const extendedPath = path.join(os.tmpdir(), `extended_${Date.now()}.mp4`);
+
+  await execFileAsync('ffmpeg', [
+    '-y', '-hide_banner', '-loglevel', 'error',
+    '-i', rawPath,
+    '-vf', `tpad=stop_mode=clone:stop_duration=${OUTRO_SECONDS}`,
+    '-af', `apad=pad_dur=${OUTRO_SECONDS}`,
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+    '-c:a', 'aac',
+    extendedPath,
+  ], { timeout: 180_000, maxBuffer: 1024 * 1024 * 1024 });
+
+  const brandingFilter = brandingToVfString(OVERLAY, totalDuration);
+
+  await execFileAsync('ffmpeg', [
+    '-y', '-hide_banner', '-loglevel', 'error',
+    '-i', extendedPath,
+    '-vf', brandingFilter,
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+    '-c:a', 'copy',
+    OUTPUT_FILE,
+  ], { timeout: 180_000, maxBuffer: 1024 * 1024 * 1024 });
 
   await Promise.all([
     ...roomAssets.map((r) => fs.unlink(r.photoPath).catch(() => {})),
     ...roomAssets.map((r) => fs.unlink(r.audioPath).catch(() => {})),
-    fs.unlink(outputTemp).catch(() => {}),
+    fs.unlink(rawPath).catch(() => {}),
+    fs.unlink(extendedPath).catch(() => {}),
   ]);
+
+  console.log(`[Test] Done: ${OUTPUT_FILE}`);
 }
 
-main().catch((err) => {
-  console.error('[Manual] Failed:', err.message || err);
-  if (err.stderr) console.error('[Manual] FFmpeg stderr:', err.stderr);
-  console.error('[Manual] Temp files NOT deleted — check /tmp/photo*.jpg and /tmp/narration_*.mp4 manually.');
-  process.exit(1);
-});
+main().catch((err) => { console.error('[Test] Failed:', err); process.exit(1); });

@@ -10,6 +10,32 @@ const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
 const GHL_OBJECT_KEY = process.env.GHL_PROPERTY_OBJECT_KEY ?? 'custom_objects.properties';
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com/objects';
 
+function parseUnitPriceBreakdown(raw?: string): Array<{ type: string; price_min: number; price_max: number }> {
+  if (!raw || typeof raw !== 'string') return [];
+
+  return raw
+    .split('|')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [typePart, pricePart] = entry.split(':');
+      if (!typePart || !pricePart) return null;
+
+      const type = typePart.trim();
+      const [minPart, maxPart] = pricePart.split('-').map((part) => part.trim());
+      const price_min = Number.parseFloat(minPart.replace(/[^\d.]/g, ''));
+      const price_max = Number.parseFloat(maxPart.replace(/[^\d.]/g, ''));
+
+      if (!type || Number.isNaN(price_min) || Number.isNaN(price_max)) return null;
+      return {
+        type,
+        price_min,
+        price_max,
+      };
+    })
+    .filter((entry): entry is { type: string; price_min: number; price_max: number } => Boolean(entry));
+}
+
 interface GHLCustomObjectRecord {
   id: string;
   sort: [number, string]; // cursor for pagination
@@ -17,10 +43,14 @@ interface GHLCustomObjectRecord {
     property_id?: string;
     property_name?: string;
     location?: string;
+    sublocation?: string; // NEW — e.g. "Gitanga Rd", separate from main location
     status?: string;
     manual_video_url?: string;
-    image_urls?: string; // comma-separated string — GHL has no array field type
-    amenities?: string;  // comma-separated string — same reason
+    image_urls?: string | string[]; // GHL may return this as a flat comma-separated string
+                                    // or as an array, depending on field setup/legacy data.
+    amenities?: string | string[]; // Checkbox-style fields can come back as an array of
+                                    // slugs, while older records may still send a plain string.
+    property_description?: string; // was: description
     price?: number;
     payment_plan_structure?: string;
     house_size_sqft?: number;
@@ -34,6 +64,13 @@ interface GHLCustomObjectRecord {
     completion_time?: string;
     level_floors?: string;
     view?: string;
+    show_house_ready?: string[]; // was: boolean — GHL checkbox always returns an array
+    unit_price_breakdown?: string; // NEW — delimited text field for
+                                    // multi-unit-type properties, e.g.
+                                    // "1 Bed:10.5-10.9M|2 Bed:16.3-16.9M".
+                                    // Parsed into structured objects
+                                    // wherever propertyData is built for
+                                    // buildScenePlan.
   };
 }
 
@@ -93,20 +130,13 @@ export const initGhlPollerCron = () => {
           try {
             const props = record.properties || {};
 
-            // GHL stores these as flat comma-separated strings — split and
-            // trim. Empty/missing must become [], not [''] (what
-            // ''.split(',') actually produces).
-            const imageUrls = props.image_urls
+            // GHL may send these fields as either strings or arrays.
+            // Normalize both shapes into a clean array of trimmed values.
+            const imageUrls = Array.isArray(props.image_urls)
               ? props.image_urls
-                  .split(',')
-                  .map((url) => url.trim())
+                  .map((url) => String(url).trim())
                   .filter(Boolean)
                   .filter((url) => {
-                    // Guards against exactly what happened with "Westlands
-                    // Sky Villa": stray text typed into the field (a
-                    // question, a note, anything not a URL) getting treated
-                    // as an image and crashing the fetch downstream. Only
-                    // keep entries that are actually parseable http(s) URLs.
                     try {
                       const parsed = new URL(url);
                       return parsed.protocol === 'http:' || parsed.protocol === 'https:';
@@ -115,10 +145,29 @@ export const initGhlPollerCron = () => {
                       return false;
                     }
                   })
+              : typeof props.image_urls === 'string'
+                ? props.image_urls
+                    .split(',')
+                    .map((url) => url.trim())
+                    .filter(Boolean)
+                    .filter((url) => {
+                      try {
+                        const parsed = new URL(url);
+                        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+                      } catch {
+                        console.warn(`[GHL Poller] Dropping non-URL entry in image_urls: "${url.slice(0, 60)}..."`);
+                        return false;
+                      }
+                    })
+                : [];
+
+            const amenitiesList = Array.isArray(props.amenities)
+              ? props.amenities
+                  .map((item) => String(item).trim())
+                  .filter(Boolean)
               : [];
-            const amenitiesList = props.amenities
-              ? props.amenities.split(',').map((item) => item.trim()).filter(Boolean)
-              : [];
+
+            const unitPriceBreakdown = parseUnitPriceBreakdown(props.unit_price_breakdown);
 
             // Cif this record already exists BEFORE
             // upserting. The old code always wrote status from GHL's data
@@ -151,12 +200,16 @@ export const initGhlPollerCron = () => {
               total_units: props.total_units || null,
               price_min: props.price_min || props.price || null,
               price_max: props.price_max || props.price || null,
+              unit_price_breakdown: unitPriceBreakdown,
               developer_contact: props.developer_contact || null,
               developer_email: props.developer_email || null,
               developer_phone: props.developer_phone || null,
               completion_time: props.completion_time || null,
               level_floors: props.level_floors || null,
-              view_description: props.view || null
+              view_description: props.view || null,
+              description: props.property_description || null,
+              show_house_ready: Array.isArray(props.show_house_ready) && props.show_house_ready.includes('yes'),
+              sublocation: props.sublocation || null,
             };
 
             // Only set status if this is a genuinely new record. Existing

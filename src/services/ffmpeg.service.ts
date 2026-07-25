@@ -26,11 +26,14 @@ const HEADER_H = 200;
 // header at real phone viewing scale). If the branding module's margins
 // change again, this must grow/shrink to match or content will overlap
 // the text (too small) or leave a dead gap (too big).
-const INFO_BAND_H = 230;
-const FOOTER_H = 250;
+//const INFO_BAND_H = 230;
+//const FOOTER_H = 250;
+//const FOOTER_H = 150;
+//const CONTENT_W = OUTPUT_W;
+//const CONTENT_H = OUTPUT_H - HEADER_H - INFO_BAND_H - FOOTER_H; // 1240
+//const CONTENT_Y_OFFSET = HEADER_H + INFO_BAND_H; // 430 — single source for both pipelines below
 const CONTENT_W = OUTPUT_W;
-const CONTENT_H = OUTPUT_H - HEADER_H - INFO_BAND_H - FOOTER_H; // 1240
-const CONTENT_Y_OFFSET = HEADER_H + INFO_BAND_H; // 430 — single source for both pipelines below
+const CONTENT_H = OUTPUT_H; // video now fills the full frame; branding overlays on top, doesn't reserve space
 
 const BACKGROUND_MUSIC_PATH = process.env.BACKGROUND_MUSIC_PATH;
 const BACKGROUND_MUSIC_VOLUME = 0.12;
@@ -205,9 +208,9 @@ export class FFmpegService {
       );
 
       filterParts.push(`[intro][mid][outro]concat=n=3:v=1:a=0[content]`);
-      filterParts.push(`[${whiteBgInputIndex}:v][content]overlay=0:${CONTENT_Y_OFFSET}[vertical]`);
+      filterParts.push(`[${whiteBgInputIndex}:v][content]overlay=0:0[vertical]`);
 
-      filterParts.push(chainBrandingLabels(overlay, 'vertical', 'branded', { headerH: HEADER_H, footerH: FOOTER_H }));
+      filterParts.push(chainBrandingLabels(overlay, TOTAL_DURATION, 'vertical', 'branded'));
       filterParts.push(`[branded]scale=${OUTPUT_W}:${OUTPUT_H}:force_original_aspect_ratio=disable,setsar=1[final_visual]`);
 
       filterParts.push(`anullsrc=channel_layout=stereo:sample_rate=44100,atrim=0:${INTRO_DURATION}[introAud]`);
@@ -284,8 +287,7 @@ export class FFmpegService {
       // originally. Both now reference the same shared constants.
       `[0:v]scale=1080:${CONTENT_H}:force_original_aspect_ratio=increase,crop=1080:${CONTENT_H},setsar=1,fps=25[bg];` +
       `[1:v]chromakey=0x00FF00:0.25:0.08,despill=type=green,scale=480:-2[avatar];` +
-      `[bg][avatar]overlay=(W-w)/2:H-h-20[scene];` +
-      `[scene]pad=${OUTPUT_W}:${OUTPUT_H}:0:${CONTENT_Y_OFFSET}:color=white[v]`,
+      `[bg][avatar]overlay=(W-w)/2:H-h-20[v]`,
       '-map', '[v]',
       '-map', '1:a',
       '-t', audioDuration.toFixed(3),
@@ -347,8 +349,8 @@ export class FFmpegService {
 
     const videoFilter = needsFreezePad
       ? `[0:v]scale=1080:${CONTENT_H}:force_original_aspect_ratio=increase,crop=1080:${CONTENT_H},setsar=1,fps=25,` +
-        `tpad=stop_mode=clone:stop_duration=${mismatch.toFixed(3)}[bg]`
-      : `[0:v]scale=1080:${CONTENT_H}:force_original_aspect_ratio=increase,crop=1080:${CONTENT_H},setsar=1,fps=25[bg]`;
+        `tpad=stop_mode=clone:stop_duration=${mismatch.toFixed(3)}[v]`
+      : `[0:v]scale=1080:${CONTENT_H}:force_original_aspect_ratio=increase,crop=1080:${CONTENT_H},setsar=1,fps=25[v]`;
 
     await execFileAsync('ffmpeg', [
       '-y', '-loglevel', 'error',
@@ -359,8 +361,7 @@ export class FFmpegService {
       // the avatar composited into its environment by HeyGen/Seedance.
       // Same CONTENT_H / CONTENT_Y_OFFSET math as buildSyncedChunk so this
       // pads onto the shared canvas identically.
-      `${videoFilter};` +
-      `[bg]pad=${OUTPUT_W}:${OUTPUT_H}:0:${CONTENT_Y_OFFSET}:color=white[v]`,
+      videoFilter,
       '-map', '[v]',
       '-map', '1:a',
       '-t', targetDuration.toFixed(3),
@@ -409,7 +410,8 @@ export class FFmpegService {
         stitchedPath,
       ], { timeout: 120_000 });
 
-      const brandingFilter = brandingToVfString(overlay, { headerH: HEADER_H, footerH: FOOTER_H });
+      const videoDuration = await this.getDurationSeconds(stitchedPath);
+      const brandingFilter = brandingToVfString(overlay, videoDuration);
 
       await execFileAsync('ffmpeg', [
         '-y', '-loglevel', 'error',

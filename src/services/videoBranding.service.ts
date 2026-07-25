@@ -1,25 +1,21 @@
 // src/services/videoBranding.service.ts
-//
-
-
 export interface PropertyOverlayData {
   price: string;
   location: string;
   unitType: string;
 }
 
-export interface BrandingLayout {
-  headerH: number;
-  footerH: number;
+export interface BrandingTiming {
+  introSeconds: number;
+  outroSeconds: number;
 }
 
-export const DEFAULT_BRANDING_LAYOUT: BrandingLayout = {
-  headerH: 200,
-  footerH: 250,
+export const DEFAULT_BRANDING_TIMING: BrandingTiming = {
+  introSeconds: 4,
+  outroSeconds: 3,
 };
 
 const FONT = 'fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
-
 const NAVY = '#002b5b';
 const GOLD = '#C5A059';
 const GREY = '#7a7a7a';
@@ -32,68 +28,56 @@ export function escapeDrawtext(text: string): string {
     .replace(/%/g, '\\%');
 }
 
-
+/**
+ * NO top navy band anymore — client wants it removed entirely, not resized.
+ * Intro text now sits directly over the video with individual semi-
+ * transparent boxes behind each line (same style already used for price),
+ * stacked top to bottom, no overlapping. Outro window is now placed AFTER
+ * the real video content, not overlapping the last few seconds — see
+ * ffmpeg.service.ts, which now extends total duration by outroSeconds
+ * before this function is called, so outroStart = originalDuration exactly.
+ */
 export function buildBrandingOps(
   overlay: PropertyOverlayData,
-  layout: BrandingLayout = DEFAULT_BRANDING_LAYOUT,
+  totalDurationWithOutro: number, // original video length + outroSeconds
+  timing: BrandingTiming = DEFAULT_BRANDING_TIMING,
 ): string[] {
-  const { headerH, footerH } = layout;
+  const { introSeconds, outroSeconds } = timing;
   const priceText = escapeDrawtext(overlay.price);
   const unitTypeText = escapeDrawtext(overlay.unitType);
   const locationText = escapeDrawtext(overlay.location);
 
-  // 80px clear margin under the header. 40px still LOOKED like the price
-  // was touching the navy header when actually viewed on a phone — a small
-  // absolute gap reads as "connected" at real viewing scale even when
-  // mathematically separated. 80px gives an unambiguous visible white gap.
-  const PRICE_TOP_MARGIN = 80;
-  const priceY = headerH + PRICE_TOP_MARGIN; // 280
-  const unitTypeY = priceY + 70;             // 350
-  const locationY = unitTypeY + 40;          // 390
+  const outroStart = totalDurationWithOutro - outroSeconds;
 
   return [
-    // --- Header ---
-    `drawbox=x=0:y=0:w=iw:h=${headerH}:color=${NAVY}@1:t=fill`,
-    `drawtext=${FONT}:text='Chestone Properties':fontcolor=${GOLD}:fontsize=52:x=40:y=75`,
-    `drawtext=${FONT}:text='Call/Text +254 726 111 133':fontcolor=${GOLD}:fontsize=42:x=w-tw-40:y=80`,
+    // --- INTRO: stacked text lines, own background box each, no full band ---
+    `drawtext=${FONT}:text='${priceText}':fontcolor=${NAVY}:fontsize=52:x=30:y=60:box=1:boxcolor=white@0.9:boxborderw=12:enable='between(t,0,${introSeconds})'`,
+    `drawtext=${FONT}:text='${unitTypeText}':fontcolor=${NAVY}:fontsize=32:x=30:y=130:box=1:boxcolor=white@0.9:boxborderw=10:enable='between(t,0,${introSeconds})'`,
+    `drawtext=${FONT}:text='${locationText}':fontcolor=${GREY}:fontsize=26:x=30:y=170:box=1:boxcolor=white@0.9:boxborderw=10:enable='between(t,0,${introSeconds})'`,
 
-    // --- Price / info band ---
-    `drawtext=${FONT}:text='${priceText}':fontcolor=${NAVY}:fontsize=56:x=30:y=${priceY}`,
-    `drawtext=${FONT}:text='${unitTypeText}':fontcolor=${NAVY}:fontsize=34:x=30:y=${unitTypeY}`,
-    `drawtext=${FONT}:text='${locationText}':fontcolor=${GREY}:fontsize=28:x=30:y=${locationY}`,
-
-    // --- Footer ---
-    `drawbox=x=0:y=h-${footerH}:w=iw:h=${footerH}:color=${NAVY}@1:t=fill`,
-   // `drawtext=${FONT}:text='Structured Property Solution':fontcolor=${GOLD}:fontsize=48:x=(w-tw)/2:y=h-190`,
-    `drawtext=${FONT}:text='High Returns on your investment.':fontcolor=white:fontsize=36:x=(w-tw)/2:y=h-125`,
-    // Watermark: was white@0.55 on a navy background — invisible (white on
-    // navy with only 55% opacity barely shows). Gold matches the header's
-    // brand color and stays clearly readable, still subtle via opacity.
-    `drawtext=${FONT}:text='Chestone Properties Ltd':fontcolor=${GOLD}@0.7:fontsize=26:x=(w-tw)/2:y=h-70`,
+    // --- OUTRO: full-screen navy card, only during the appended tail ---
+    `drawbox=x=0:y=0:w=iw:h=ih:color=${NAVY}@1:t=fill:enable='between(t,${outroStart},${totalDurationWithOutro})'`,
+    `drawtext=${FONT}:text='Chestone Properties':fontcolor=${GOLD}:fontsize=64:x=(w-tw)/2:y=(h-100)/2:enable='between(t,${outroStart},${totalDurationWithOutro})'`,
+    `drawtext=${FONT}:text='Call/Text +254 726 111 133':fontcolor=white:fontsize=36:x=(w-tw)/2:y=(h-100)/2+80:enable='between(t,${outroStart},${totalDurationWithOutro})'`,
   ];
 }
 
-/** Flat -vf string — use when branding is the only filter needed (single -vf pass). */
 export function brandingToVfString(
   overlay: PropertyOverlayData,
-  layout?: BrandingLayout,
+  totalDurationWithOutro: number,
+  timing?: BrandingTiming,
 ): string {
-  return buildBrandingOps(overlay, layout).join(',');
+  return buildBrandingOps(overlay, totalDurationWithOutro, timing).join(',');
 }
 
-/**
- * Chains the branding ops as labeled nodes inside a larger -filter_complex
- * graph. e.g. chainBrandingLabels(overlay, 'vertical', 'final_visual')
- * produces:
- *   [vertical]op1[b_0];[b_0]op2[b_1];...;[b_N-1]opLast[final_visual]
- */
 export function chainBrandingLabels(
   overlay: PropertyOverlayData,
+  totalDurationWithOutro: number,
   inputLabel: string,
   outputLabel: string,
-  layout?: BrandingLayout,
+  timing?: BrandingTiming,
 ): string {
-  const ops = buildBrandingOps(overlay, layout);
+  const ops = buildBrandingOps(overlay, totalDurationWithOutro, timing);
   const parts: string[] = [];
   let prevLabel = inputLabel;
 
