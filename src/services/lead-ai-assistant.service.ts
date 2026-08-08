@@ -15,10 +15,18 @@
 // keyword filter, since open-ended off-topic detection is what an LLM is
 // actually good at and a keyword list would both miss things and false-
 // positive on legitimate property questions.
-import axios from 'axios';
-
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+//
+// Uses generateChatCompletion (ai-provider.service.ts), Groq-only here
+// (useOllamaFallback: false): verified live that this VPS's Ollama model
+// (llama3.2:1b -- the only size that responds in a few seconds on this
+// 2 vCPU/3.8GB box) unreliably drops instructions under this prompt's
+// full rule set, specifically the "always convey the required question"
+// rule in 2 of 3 test cases. A dropped question stalls the qualification
+// flow, which is worse for lead capture than the plain canned text this
+// already falls back to. The Ollama fallback stays enabled for the ad
+// advisor (ad-ai-advisor.service.ts), whose single-instruction prompt it
+// handles fine.
+import { generateChatCompletion } from './ai-provider.service';
 
 const SYSTEM_PROMPT = `You are the WhatsApp assistant for Chestone Properties Ltd, a Kenyan real estate company, mid-conversation with a property lead.
 
@@ -42,18 +50,11 @@ interface GenerateBotReplyParams {
 }
 
 /**
- * Never throws -- falls back to the plain canned text on any failure
- * (missing API key, network error, malformed response, timeout), so a
- * Groq outage degrades to the old scripted behavior instead of losing the
+ * Never throws -- falls back to the plain canned text if Groq fails, so
+ * an outage degrades to the old scripted behavior instead of losing the
  * qualification flow.
  */
 export const generateBotReply = async (params: GenerateBotReplyParams): Promise<string> => {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    console.warn('[Lead AI Assistant] Missing GROQ_API_KEY -- using canned reply.');
-    return params.cannedReply;
-  }
-
   const userContext = [
     params.leadName ? `Lead's name: ${params.leadName}` : null,
     `Lead's latest message: "${params.userMessage}"`,
@@ -63,26 +64,15 @@ export const generateBotReply = async (params: GenerateBotReplyParams): Promise<
     .join('\n');
 
   try {
-    const response = await axios.post(
-      GROQ_API_URL,
-      {
-        model: GROQ_MODEL,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userContext },
-        ],
-        temperature: 0.4,
-        max_tokens: 150,
-      },
-      // Kept well under the MSA's 10s inbound-to-reply benchmark, leaving
-      // headroom for the WhatsApp send call that still has to happen after.
-      { headers: { Authorization: `Bearer ${apiKey}` }, timeout: 5000 },
-    );
-
-    const reply = response.data.choices?.[0]?.message?.content?.trim();
-    return reply || params.cannedReply;
+    return await generateChatCompletion({
+      systemPrompt: SYSTEM_PROMPT,
+      userMessage: userContext,
+      temperature: 0.4,
+      maxTokens: 150,
+      useOllamaFallback: false,
+    });
   } catch (error) {
-    console.error('[Lead AI Assistant] Groq request failed, using canned reply:', (error as Error).message);
+    console.error('[Lead AI Assistant] Groq failed, using canned reply:', (error as Error).message);
     return params.cannedReply;
   }
 };

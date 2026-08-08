@@ -7,20 +7,17 @@
 // gives a plain-language recommendation a human can act on, logged
 // alongside the rule engine's own entries so both are visible in one
 // place (ad_rule_executions).
-import axios from 'axios';
+//
+// Uses generateChatCompletion (ai-provider.service.ts): Groq first, a
+// self-hosted Ollama instance as fallback if Groq fails or is
+// unconfigured. This is a background/async call (a cron job, not a user
+// waiting on a response), so it keeps the provider's generous default
+// Ollama timeout rather than overriding it short.
 import { withSystemContext } from '../config/database';
 import { AdProvider } from './system-secrets.service';
-
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+import { generateChatCompletion } from './ai-provider.service';
 
 export const generateAdvisory = async (platform: AdProvider, campaignId: string, adId: string): Promise<void> => {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    console.warn('[Ad Advisor] Missing GROQ_API_KEY -- skipping advisory generation.');
-    return;
-  }
-
   const context = await withSystemContext(async (tx) => {
     const recentLogs = await tx.adPerformanceLog.findMany({
       where: { platform, campaignId, adId },
@@ -43,29 +40,13 @@ export const generateAdvisory = async (platform: AdProvider, campaignId: string,
   const ruleHistory = context.recentRules.map((r) => `${r.ruleName}: ${r.reason}`).join('\n');
 
   try {
-    const response = await axios.post(
-      GROQ_API_URL,
-      {
-        model: GROQ_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are an ad performance advisor for a Kenyan real estate company. Give one short, specific, actionable recommendation (2-3 sentences max) based on the data. Do not promise a specific ROAS or CPL outcome -- only recommend an action and explain why.',
-          },
-          {
-            role: 'user',
-            content: `Platform: ${platform}\nCampaign: ${campaignId}\nAd: ${adId}\n\nRecent hourly performance:\n${summary}\n\nRecent rule engine decisions:\n${ruleHistory}`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 200,
-      },
-      { headers: { Authorization: `Bearer ${apiKey}` } },
-    );
-
-    const advisory = response.data.choices?.[0]?.message?.content?.trim();
-    if (!advisory) return;
+    const advisory = await generateChatCompletion({
+      systemPrompt:
+        'You are an ad performance advisor for a Kenyan real estate company. Give one short, specific, actionable recommendation (2-3 sentences max) based on the data. Do not promise a specific ROAS or CPL outcome -- only recommend an action and explain why.',
+      userMessage: `Platform: ${platform}\nCampaign: ${campaignId}\nAd: ${adId}\n\nRecent hourly performance:\n${summary}\n\nRecent rule engine decisions:\n${ruleHistory}`,
+      temperature: 0.3,
+      maxTokens: 200,
+    });
 
     await withSystemContext((tx) =>
       tx.adRuleExecution.create({
@@ -81,6 +62,6 @@ export const generateAdvisory = async (platform: AdProvider, campaignId: string,
       }),
     );
   } catch (error) {
-    console.error('[Ad Advisor] Groq request failed:', (error as Error).message);
+    console.error('[Ad Advisor] Both Groq and Ollama failed, skipping advisory:', (error as Error).message);
   }
 };
