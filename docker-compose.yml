@@ -1,12 +1,30 @@
 version: '3.8'
 
 services:
-  # The Shock-Absorber Queue Infrastructure
+  # Self-hosted PostgreSQL
+  chestone-postgres:
+    image: postgres:16-alpine
+    container_name: chestone_postgres_db
+    ports:
+      - "55432:5432"
+    environment:
+      - POSTGRES_USER=chestone
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-chestone_dev_password}
+      - POSTGRES_DB=chestone
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chestone -d chestone"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Redis -- BullMQ ad-action queue (Module 4)
   chestone-redis:
     image: redis:7-alpine
     container_name: chestone_redis_queue
     ports:
-      - "6379:6379"
+      - "56379:6379"
     volumes:
       - redisdata:/data
     command: redis-server --appendonly yes
@@ -21,21 +39,22 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: chestone_pipeline_app
+    container_name: chestone_platform_app
     ports:
       - "3000:3000"
     environment:
       - PORT=3000
       - NODE_ENV=production
-      # Map the internal Docker network to the Redis container
-      - REDIS_URL=redis://chestone-redis:6379
-    # Pulls your Supabase, HeyGen, Lofty, and GCS keys from your local .env file
+    # Pulls DATABASE_URL, JWT_SECRET, and other platform keys from your local .env file
     env_file:
       - .env
     depends_on:
+      chestone-postgres:
+        condition: service_healthy
       chestone-redis:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
+  pgdata:
   redisdata:

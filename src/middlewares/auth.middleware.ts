@@ -1,41 +1,44 @@
 // src/middlewares/auth.middleware.ts
 import { Request, Response, NextFunction } from 'express';
+import { verifyToken, UserRole } from '../services/auth.service';
+
+export type { UserRole };
 
 /**
- * Extends the standard Express Request interface to include the raw byte buffer.
- * This is strictly required for HMAC-SHA256 cryptographic signature validation 
- * on incoming webhooks (e.g., HeyGen).
+ * Extends the standard Express Request interface to include the raw byte buffer
+ * (needed for HMAC signature validation on future inbound webhooks) and the
+ * authenticated user attached by authenticateJWT.
  */
 export interface AuthenticatedRequest extends Request {
   rawBody?: Buffer;
+  user?: {
+    id: string;
+    role: UserRole;
+    email: string;
+  };
 }
 
 /**
- * Validates inbound webhook requests originating from Make.com 
- * (used for the Respond.io qualification synchronization).
+ * Verifies a Bearer JWT on the Authorization header and attaches the decoded
+ * user identity to req.user. Every route that needs a logged-in user composes
+ * this with requireRole (see rbac.middleware.ts).
  */
-export const verifyMakeWebhookToken = (req: Request, res: Response, next: NextFunction): void => {
-  const authHeader = req.headers['authorization'] || req.headers['x-make-token'];
-  const expectedToken = (process.env.MAKE_WEBHOOK_SECRET || '').trim();
-
-  if (!expectedToken) {
-    console.error('[CRITICAL] MAKE_WEBHOOK_SECRET is not defined in environment variables.');
-    res.status(500).json({ error: 'Internal server configuration error' });
-    return;
-  }
-
+export const authenticateJWT = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  const authHeader = req.headers['authorization'];
   const rawHeader = (authHeader ?? '').toString().trim();
-  const token = rawHeader.toLowerCase().startsWith('bearer ')
-    ? rawHeader.slice(7).trim()
-    : rawHeader;
 
-  if (!token || token !== expectedToken) {
-    // TEMP DEBUG — REMOVE after this works; logs lengths not full secrets
-    console.warn(`[Auth Debug] stripped token len=${token.length} vs expected len=${expectedToken.length}, equal=${token === expectedToken}`);
-    console.warn('[Security Firewall] 401 Blocked: Unauthorized Make.com intercept.');
-    res.status(401).json({ error: 'Unauthorized webhook intercept: Invalid or missing token' });
+  if (!rawHeader.toLowerCase().startsWith('bearer ')) {
+    res.status(401).json({ error: 'Missing or malformed Authorization header' });
     return;
   }
 
-  next();
+  const token = rawHeader.slice(7).trim();
+
+  try {
+    const payload = verifyToken(token);
+    req.user = { id: payload.sub, role: payload.role, email: payload.email };
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
 };

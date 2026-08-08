@@ -3,24 +3,23 @@ import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
 import 'dotenv/config';
 import app from './app';
-import { videoGenerationQueue } from './config/queue.config'; 
-import './queues/video.worker'; 
-
-// Import the unified Cron orchestrator instead of individual jobs
-import { initCronJobs } from './cron'; 
+import { prisma } from './config/database';
+import { startAdActionWorker } from './workers/ad-action.worker';
+import { initAdPerformanceIngestionCron } from './cron/ad-performance-ingestion.cron';
+import { initTokenRefreshCron } from './cron/token-refresh.cron';
 
 const PORT = process.env.PORT || 3000;
 
 const startServer = async () => {
   try {
-    // Note: Supabase connects via HTTP/REST seamlessly, so there is no database connection to manually open here.
-
-    // Initialize all Background Automation (Sanitization & Budget Monitoring)
-    initCronJobs(); 
+    // Module 4: Ad Optimization Engine -- BullMQ worker + cron jobs
+    const adActionWorker = startAdActionWorker();
+    initAdPerformanceIngestionCron();
+    initTokenRefreshCron();
 
     // Open Network Listener
     const server = app.listen(PORT, () => {
-      console.log(`[Server] Chestone Pipeline running on port ${PORT}`);
+      console.log(`[Server] Chestone Platform running on port ${PORT}`);
       console.log(`[Server] Environment: ${process.env.NODE_ENV}`);
     });
 
@@ -29,11 +28,13 @@ const startServer = async () => {
       console.log(`\n[Server] Received ${signal}. Gracefully shutting down...`);
       server.close(async () => {
         console.log('[Server] HTTP connections closed.');
-        
-        // Safely pause and close the Redis queue to prevent task corruption
-        await videoGenerationQueue.close();
-        console.log('[Queue] Redis connections and worker threads closed safely.');
-        
+
+        await adActionWorker.close();
+        console.log('[Queue] Ad action worker closed safely.');
+
+        await prisma.$disconnect();
+        console.log('[Database] Prisma client disconnected safely.');
+
         process.exit(0);
       });
     };

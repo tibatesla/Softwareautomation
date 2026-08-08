@@ -1,0 +1,82 @@
+// src/schemas/property.schema.ts
+import { z } from 'zod';
+
+export const propertyStatusValues = ['available', 'reserved', 'sold', 'off_market'] as const;
+
+// Fixed amenity checklist (client-provided list, 37 items). Enforced at the
+// API boundary via zod rather than as a Postgres enum column, so adding a
+// new amenity later is a one-line change here instead of a migration --
+// the DB column stays a plain text[].
+export const propertyAmenityValues = [
+  '24/7 Manned Security',
+  'CCTV Surveillance',
+  'Smart Access',
+  'Electric Fencing',
+  'Intercom',
+  'Panic Buttons',
+  'Backup Generator',
+  'Borehole',
+  'Solar Water Heating',
+  'High-Speed Lifts',
+  'Fiber-Ready',
+  'Rainwater Harvesting',
+  'Fully Equipped Gym',
+  'Swimming Pool',
+  "Kids' Splash Pool",
+  'Spa',
+  'Sauna',
+  'Steam Room',
+  'Yoga Studio',
+  'Tennis/Padel Courts',
+  'Arrival Concierge',
+  'Residence Lounge',
+  'Clubhouse',
+  'Sky Recreation Garden',
+  'Landscaped Gardens',
+  'BBQ Area',
+  'Cafe',
+  'Business Center',
+  'Retail Area',
+  'Laundry Services',
+  'Smart Parcel Lockers',
+  'EV Charging',
+  'Smart Home Integration',
+  'Acoustic Windows',
+  'Driver Waiting Room',
+  'Private Storage',
+  'Wine Cellar',
+] as const;
+
+export const createPropertySchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  price: z.number().nonnegative().optional(),
+  currency: z.string().length(3).optional(),
+  status: z.enum(propertyStatusValues).optional(),
+  assignedAgentId: z.string().uuid().optional(),
+
+  // CRM Handoff (CRM.pdf) field set, replacing GoHighLevel's property object.
+  referenceId: z.string().optional(),
+  priceMin: z.number().nonnegative().optional(),
+  priceMax: z.number().nonnegative().optional(),
+  unitType: z.string().optional(),
+  totalUnits: z.number().int().nonnegative().optional(),
+  developerContactName: z.string().optional(),
+  developerEmail: z.string().email().optional(),
+  developerPhone: z.string().optional(),
+  completionTime: z.string().optional(),
+  levelFloors: z.number().int().nonnegative().optional(),
+  view: z.string().optional(),
+  paymentPlanStructure: z.string().optional(),
+  houseSizeSqft: z.number().nonnegative().optional(),
+  amenities: z.array(z.enum(propertyAmenityValues)).optional(),
+  subLocation: z.string().optional(),
+  images: z.array(z.string().url()).optional(), // any number, from any CDN (Cloudinary or otherwise)
+  videos: z.array(z.string().url()).optional(), // any number, from any CDN (Cloudinary or otherwise)
+});
+
+export const updatePropertySchema = createPropertySchema.partial();
+
+export type CreatePropertyPayload = z.infer<typeof createPropertySchema>;
+export type UpdatePropertyPayload = z.infer<typeof updatePropertySchema>;

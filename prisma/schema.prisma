@@ -1,0 +1,334 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String         @unique
+  passwordHash       String         @map("password_hash")
+  fullName           String         @map("full_name")
+  role               UserRole       @default(agent)
+  isActive           Boolean        @default(true) @map("is_active")
+  lastLoginAt        DateTime?      @map("last_login_at") @db.Timestamptz(6)
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  agentPenalties     AgentPenalty[]
+  bookings           Booking[]
+  leads              Lead[]
+  payments           Payment[]
+  assignedProperties Property[]     @relation("PropertyAssignedAgent")
+  createdProperties  Property[]     @relation("PropertyCreatedBy")
+  rotatedSecrets     SystemSecret[]
+
+  @@index([role], map: "idx_users_role")
+  @@map("users")
+}
+
+model Property {
+  id                   String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title                String
+  description          String?
+  location             String?
+  price                Decimal        @default(0) @db.Decimal(14, 2)
+  currency             String         @default("KES") @db.Char(3)
+  status               PropertyStatus @default(available)
+  assignedAgentId      String?        @map("assigned_agent_id") @db.Uuid
+  createdBy            String?        @map("created_by") @db.Uuid
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  referenceId          String?        @unique @map("reference_id")
+  priceMin             Decimal?       @map("price_min") @db.Decimal(14, 2)
+  priceMax             Decimal?       @map("price_max") @db.Decimal(14, 2)
+  unitType             String?        @map("unit_type")
+  totalUnits           Int?           @map("total_units")
+  developerContactName String?        @map("developer_contact_name")
+  developerEmail       String?        @map("developer_email")
+  developerPhone       String?        @map("developer_phone")
+  completionTime       String?        @map("completion_time")
+  levelFloors          Int?           @map("level_floors")
+  view                 String?
+  paymentPlanStructure String?        @map("payment_plan_structure")
+  houseSizeSqft        Decimal?       @map("house_size_sqft") @db.Decimal(10, 2)
+  amenities            String[]       @default([])
+  subLocation          String?        @map("sub_location")
+  images               String[]       @default([])
+  videos               String[]       @default([])
+  bookings             Booking[]
+  leads                Lead[]
+  payments             Payment[]
+  assignedAgent        User?          @relation("PropertyAssignedAgent", fields: [assignedAgentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator              User?          @relation("PropertyCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([assignedAgentId], map: "idx_properties_assigned_agent")
+  @@index([status], map: "idx_properties_status")
+  @@map("properties")
+}
+
+model Lead {
+  id                  String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fullName            String?                 @map("full_name")
+  phoneNumber         String                  @map("phone_number")
+  email               String?
+  source              String?
+  propertyId          String?                 @map("property_id") @db.Uuid
+  qualificationStatus LeadQualificationStatus @default(new) @map("qualification_status")
+  budgetRange         String?                 @map("budget_range")
+  preferredUnit       String?                 @map("preferred_unit")
+  purchaseTimeline    String?                 @map("purchase_timeline")
+  targetSegment       LeadSegment?            @map("target_segment")
+  countryCode         String?                 @map("country_code")
+  requiresProxyVisit  Boolean                 @default(false) @map("requires_proxy_visit")
+  proxyPhoneNumber    String?                 @map("proxy_phone_number")
+  isOvernightDiaspora Boolean                 @default(false) @map("is_overnight_diaspora")
+  fbclid              String?
+  claimedAt           DateTime?               @map("claimed_at") @db.Timestamptz(6)
+  claimedByAgentId    String?                 @map("claimed_by_agent_id") @db.Uuid
+  lastCapiFiredAt     DateTime?               @map("last_capi_fired_at") @db.Timestamptz(6)
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tags                String[]                @default([])
+  investmentType      String?                 @map("investment_type")
+  transactionType     String?                 @map("transaction_type")
+  dealStage           DealStage               @default(new) @map("deal_stage")
+  propertyInterestRaw String?                 @map("property_interest_raw")
+  ctwaClid            String?                 @map("ctwa_clid")
+  agentPenalties      AgentPenalty[]
+  bookings            Booking[]
+  messages            LeadMessage[]
+  claimedByAgent      User?                   @relation(fields: [claimedByAgentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  property            Property?               @relation(fields: [propertyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payments            Payment[]
+
+  @@index([claimedByAgentId], map: "idx_leads_claimed_by")
+  @@index([phoneNumber], map: "idx_leads_phone")
+  @@index([targetSegment, qualificationStatus], map: "idx_leads_segment_status")
+  @@index([createdAt], map: "idx_leads_unclaimed_qualified", where: raw("((qualification_status = 'qualified'::lead_qualification_status) AND (claimed_by_agent_id IS NULL))"))
+  @@index([dealStage], map: "idx_leads_deal_stage")
+  @@map("leads")
+}
+
+model Payment {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  propertyId    String   @map("property_id") @db.Uuid
+  leadId        String?  @map("lead_id") @db.Uuid
+  amount        Decimal  @db.Decimal(14, 2)
+  currency      String   @default("KES") @db.Char(3)
+  paymentMethod String?  @map("payment_method")
+  paymentDate   DateTime @default(dbgenerated("CURRENT_DATE")) @map("payment_date") @db.Date
+  recordedBy    String   @map("recorded_by") @db.Uuid
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lead          Lead?    @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recorder      User     @relation(fields: [recordedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([leadId], map: "idx_payments_lead")
+  @@index([propertyId], map: "idx_payments_property")
+  @@map("payments")
+}
+
+model Booking {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  propertyId  String        @map("property_id") @db.Uuid
+  leadId      String?       @map("lead_id") @db.Uuid
+  agentId     String        @map("agent_id") @db.Uuid
+  scheduledAt DateTime      @map("scheduled_at") @db.Timestamptz(6)
+  status      BookingStatus @default(scheduled)
+  isVirtual   Boolean       @default(false) @map("is_virtual")
+  notes       String?
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  agent       User          @relation(fields: [agentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lead        Lead?         @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  property    Property      @relation(fields: [propertyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([agentId, scheduledAt], map: "idx_bookings_agent_schedule")
+  @@index([propertyId], map: "idx_bookings_property")
+  @@map("bookings")
+}
+
+model AdPerformanceLog {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  platform       AdPlatform
+  campaignId     String            @map("campaign_id")
+  adId           String            @map("ad_id")
+  windowStart    DateTime          @map("window_start") @db.Timestamptz(6)
+  impressions    Int               @default(0)
+  clicks         Int               @default(0)
+  spend          Decimal           @default(0) @db.Decimal(12, 2)
+  currency       String            @default("KES") @db.Char(3)
+  qualifiedLeads Int               @default(0) @map("qualified_leads")
+  ctr            Decimal?          @default(dbgenerated("\nCASE\n    WHEN (impressions > 0) THEN round((((clicks)::numeric / (impressions)::numeric) * (100)::numeric), 3)\n    ELSE NULL::numeric\nEND")) @db.Decimal(6, 3)
+  cpql           Decimal?          @default(dbgenerated("\nCASE\n    WHEN (qualified_leads > 0) THEN round((spend / (qualified_leads)::numeric), 2)\n    ELSE NULL::numeric\nEND")) @db.Decimal(12, 2)
+  loggedAt       DateTime          @default(now()) @map("logged_at") @db.Timestamptz(6)
+  ruleExecutions AdRuleExecution[]
+
+  @@unique([platform, campaignId, adId, windowStart])
+  @@index([platform, adId, windowStart], map: "idx_adperf_platform_ad_window")
+  @@index([windowStart], map: "idx_adperf_window")
+  @@map("ad_performance_logs")
+}
+
+model AdRuleExecution {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adPerformanceLogId String?           @map("ad_performance_log_id") @db.Uuid
+  ruleName           String            @map("rule_name")
+  platform           AdPlatform?
+  campaignId         String?           @map("campaign_id")
+  adId               String?           @map("ad_id")
+  actionTaken        String            @map("action_taken")
+  reason             String?
+  success            Boolean           @default(true)
+  errorDetail        String?           @map("error_detail")
+  executedAt         DateTime          @default(now()) @map("executed_at") @db.Timestamptz(6)
+  adPerformanceLog   AdPerformanceLog? @relation(fields: [adPerformanceLogId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([executedAt], map: "idx_adrules_executed_at")
+  @@index([platform, adId], map: "idx_adrules_platform_ad")
+  @@map("ad_rule_executions")
+}
+
+model LeadMessage {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId            String               @map("lead_id") @db.Uuid
+  direction         MessageDirection
+  body              String
+  whatsappMessageId String?              @map("whatsapp_message_id")
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  senderType        MessageSenderType?   @map("sender_type")
+  lead              Lead                 @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([leadId, createdAt], map: "idx_lead_messages_lead_created")
+  @@map("lead_messages")
+}
+
+model AgentPenalty {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agentId     String   @map("agent_id") @db.Uuid
+  leadId      String?  @map("lead_id") @db.Uuid
+  penaltyType String   @map("penalty_type")
+  minutesLate Int?     @map("minutes_late")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  agent       User     @relation(fields: [agentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lead        Lead?    @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([agentId], map: "idx_penalties_agent")
+  @@index([leadId], map: "idx_penalties_lead")
+  @@map("agent_penalties")
+}
+
+model SystemSecret {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  keyName       String       @unique @map("key_name")
+  secretValue   String       @map("secret_value")
+  provider      String
+  status        SecretStatus @default(active)
+  expiresAt     DateTime?    @map("expires_at") @db.Timestamptz(6)
+  lastRotatedAt DateTime     @default(now()) @map("last_rotated_at") @db.Timestamptz(6)
+  rotatedBy     String?      @map("rotated_by") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  rotator       User?        @relation(fields: [rotatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([provider, status], map: "idx_secrets_provider_status", where: raw("(status = 'active'::secret_status)"))
+  @@map("system_secrets")
+}
+
+/// Internal migration-tracking table owned by src/db/migrate.ts, not app data.
+model SchemaMigration {
+  filename  String   @id
+  appliedAt DateTime @default(now()) @map("applied_at") @db.Timestamptz(6)
+
+  @@map("schema_migrations")
+}
+
+enum UserRole {
+  owner
+  admin
+  agent
+
+  @@map("user_role")
+}
+
+enum PropertyStatus {
+  available
+  reserved
+  sold
+  off_market
+
+  @@map("property_status")
+}
+
+enum BookingStatus {
+  scheduled
+  completed
+  cancelled
+  no_show
+
+  @@map("booking_status")
+}
+
+enum LeadQualificationStatus {
+  new
+  qualifying
+  qualified
+  unqualified
+  converted
+  lost
+
+  @@map("lead_qualification_status")
+}
+
+enum LeadSegment {
+  domestic
+  diaspora
+
+  @@map("lead_segment")
+}
+
+enum AdPlatform {
+  meta
+  google
+  tiktok
+
+  @@map("ad_platform")
+}
+
+enum SecretStatus {
+  active
+  expired
+  revoked
+
+  @@map("secret_status")
+}
+
+enum DealStage {
+  new
+  site_visit_scheduled
+  site_visit_done
+  offer_signed
+  deposit_paid
+  commission_paid
+
+  @@map("deal_stage")
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+
+  @@map("message_direction")
+}
+
+enum MessageSenderType {
+  bot
+  human
+
+  @@map("message_sender_type")
+}

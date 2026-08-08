@@ -11,6 +11,9 @@ pnpm-debug.log*
 coverage/
 *.tsbuildinfo
 
+# Prisma generated client (regenerated via `npm run migrate` / `prisma generate`)
+/generated/
+
 # Environment and secrets
 .env
 .env.*
@@ -35,9 +38,17 @@ pids/
 Thumbs.db
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 
 # Project-specific local artifacts
 captured_payload.json
 frame_check.png
+
+# Internal contractor-only documents -- not part of the client deliverable
+/CRM.pdf
+/Write whole contract.pdf
+/MSA-Chestone-CodexSafari-Final.md
+/budget-justification-chestone.md
+/rag/

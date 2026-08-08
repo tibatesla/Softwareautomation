@@ -1,6 +1,6 @@
 // src/services/tracking.service.ts
 import { createHash } from 'crypto';
-import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { parsePhoneNumberFromString, CountryCode } from 'libphonenumber-js';
 
 export interface NormalizedLeadData {
   rawEmail: string;
@@ -24,7 +24,7 @@ export class LeadTrackingService {
   /**
    * Normalizes input phone metrics into clean E.164 structural definitions
    */
-  public normalizePhone(phone: string, defaultCountry: string = 'KE'): string {
+  public normalizePhone(phone: string, defaultCountry: CountryCode = 'KE'): string {
     const parsed = parsePhoneNumberFromString(phone, defaultCountry);
     if (!parsed || !parsed.isValid()) {
       // Fallback normalization logic if strict parsing fails

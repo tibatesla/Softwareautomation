@@ -2,9 +2,14 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import webhookRoutes from './routes/webhook.routes';
-import testRoutes from './routes/test.routes';
-import leadRoutes  from './routes/lead.routes';
+import authRoutes from './routes/auth.routes';
+import propertyRoutes from './routes/property.routes';
+import leadRoutes from './routes/lead.routes';
+import bookingRoutes from './routes/booking.routes';
+import paymentRoutes from './routes/payment.routes';
+import userRoutes from './routes/user.routes';
+import whatsappRoutes from './routes/whatsapp.routes';
+import adPerformanceRoutes from './routes/ad-performance.routes';
 import { AuthenticatedRequest } from './middlewares/auth.middleware'; // Needed for req.rawBody typing
 
 const app: Application = express();
@@ -28,23 +33,28 @@ app.use(express.urlencoded({ extended: true }));
 
 // Infrastructure Health Check
 app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    message: 'Chestone Automation Pipeline is operational.',
+  res.status(200).json({
+    status: 'OK',
+    message: 'Chestone Platform is operational.',
     timestamp: new Date().toISOString()
   });
 });
-//testing
-app.use('/rendered-videos', express.static('/home/tesla/chestone-pipeline/output'));
 
-// Mount the core webhook routing tier
-app.use('/api/webhooks', webhookRoutes);
+// Auth
+app.use('/api/auth', authRoutes);
 
-// MOUNT THE TEST ROUTE HERE SO EXPRESS RECOGNIZES IT
-app.use('/api', testRoutes);
-//leads routes
-app.use('/api', leadRoutes);
+// Module 2: Backend API
+app.use('/api/properties', propertyRoutes);
+app.use('/api/leads', leadRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/users', userRoutes);
 
+// Module 3: WhatsApp lead capture
+app.use('/api/webhooks/whatsapp', whatsappRoutes);
+
+// Module 4: Ad Optimization Engine
+app.use('/api/ad-performance', adPerformanceRoutes);
 
 // Fallback for unhandled routes
 app.use((req: Request, res: Response) => {
