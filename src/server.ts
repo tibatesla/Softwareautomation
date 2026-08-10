@@ -7,6 +7,7 @@ import { prisma } from './config/database';
 import { startAdActionWorker } from './workers/ad-action.worker';
 import { initAdPerformanceIngestionCron } from './cron/ad-performance-ingestion.cron';
 import { initTokenRefreshCron } from './cron/token-refresh.cron';
+import { initAgentSlaCron } from './cron/agent-sla.cron';
 
 const PORT = process.env.PORT || 3000;
 
@@ -16,6 +17,7 @@ const startServer = async () => {
     const adActionWorker = startAdActionWorker();
     initAdPerformanceIngestionCron();
     initTokenRefreshCron();
+    initAgentSlaCron();
 
     // Open Network Listener
     const server = app.listen(PORT, () => {

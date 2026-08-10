@@ -2,6 +2,15 @@
 // the client-provided amenity checklist or status enum ever changes there.
 export const PROPERTY_STATUS_VALUES = ["available", "reserved", "sold", "off_market"] as const;
 
+export const PROPERTY_AREA_VALUES = [
+  "Kilimani, Nairobi",
+  "Kileleshwa, Nairobi",
+  "Westlands, Nairobi",
+  "Lavington, Nairobi",
+  "Karen, Nairobi",
+  "Riverside, Nairobi",
+] as const;
+
 export const PROPERTY_AMENITY_VALUES = [
   "24/7 Manned Security",
   "CCTV Surveillance",

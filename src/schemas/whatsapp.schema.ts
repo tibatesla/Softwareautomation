@@ -89,8 +89,58 @@ export interface NormalizedInboundMessage {
   messageType?: string;
   senderName?: string;
   ctwaClid?: string;
+  // The ad's ID, straight off the same referral object as ctwa_clid --
+  // only meaningful when source_type is 'ad' (a CTWA post-click referral
+  // has no ad to attribute to). This is what makes it possible to find
+  // the matching ad_performance_logs row later; ctwa_clid alone can't,
+  // since that only identifies the click, not the ad/campaign/window row.
+  adSourceId?: string;
+  // Which platform adSourceId belongs to -- required once adSourceId can
+  // come from more than one platform, since Google and TikTok ad IDs
+  // aren't guaranteed distinct from each other or from Meta's.
+  adSourcePlatform?: 'meta' | 'google' | 'tiktok';
   whatsappMessageId?: string;
 }
+
+// Google and TikTok ads that click straight to WhatsApp have no
+// equivalent to Meta's referral object -- Meta's webhook has no way of
+// knowing a click came from another platform's ad. The workaround: the
+// ad's destination is a wa.me link whose pre-filled text carries a
+// reference code, e.g. "...(ref: GOOGLE-8821172)" -- see
+// buildAdReferenceWhatsAppLink. Parsed back out of the first inbound
+// message if the user sends it unedited; stripped from the stored text
+// either way so it never shows up as literal chat content to an agent.
+const AD_REFERENCE_PATTERN = /\(ref:\s*(GOOGLE|TIKTOK)-([A-Za-z0-9_-]{3,60})\)/i;
+
+export const parseAdReferenceCode = (
+  text: string,
+): { cleanText: string; adSourceId: string; adSourcePlatform: 'google' | 'tiktok' } | null => {
+  const match = text.match(AD_REFERENCE_PATTERN);
+  if (!match) return null;
+
+  return {
+    cleanText: text.replace(AD_REFERENCE_PATTERN, '').trim(),
+    adSourceId: match[2],
+    adSourcePlatform: match[1].toLowerCase() as 'google' | 'tiktok',
+  };
+};
+
+/**
+ * Builds the wa.me destination URL for a Google/TikTok ad -- paste this
+ * directly into the ad's "Message" / "Chat on WhatsApp" destination field
+ * in Google Ads / TikTok Ads Manager. openingLine is the actual greeting
+ * shown to the user; the reference code is appended, not the whole message,
+ * so it still reads as a normal enquiry if left in place.
+ */
+export const buildAdReferenceWhatsAppLink = (
+  phoneNumber: string,
+  platform: 'google' | 'tiktok',
+  adId: string,
+  openingLine = "Hi! I'm interested in Chestone Properties.",
+): string => {
+  const text = `${openingLine} (ref: ${platform.toUpperCase()}-${adId})`;
+  return `https://wa.me/${phoneNumber}?text=${encodeURIComponent(text)}`;
+};
 
 export const extractInboundMessages = (payload: MetaWhatsAppWebhookPayload): NormalizedInboundMessage[] => {
   const results: NormalizedInboundMessage[] = [];
@@ -107,12 +157,23 @@ export const extractInboundMessages = (payload: MetaWhatsAppWebhookPayload): Nor
       );
 
       for (const message of messages) {
+        const rawText = message.text?.body ?? '';
+        // Meta's native referral (ad clicked directly on Meta) takes
+        // priority when present; otherwise fall back to a parsed
+        // reference code for Google/TikTok ads that click straight to
+        // WhatsApp -- see parseAdReferenceCode below for why those need
+        // a different capture mechanism entirely.
+        const metaAdSourceId = message.referral?.source_type === 'ad' ? message.referral?.source_id : undefined;
+        const parsedRef = metaAdSourceId ? null : parseAdReferenceCode(rawText);
+
         results.push({
           waId: message.from,
-          text: message.text?.body ?? '',
+          text: parsedRef ? parsedRef.cleanText : rawText,
           messageType: message.type,
           senderName: contactsByWaId.get(message.from)?.trim() || undefined,
           ctwaClid: message.referral?.ctwa_clid,
+          adSourceId: metaAdSourceId ?? parsedRef?.adSourceId,
+          adSourcePlatform: metaAdSourceId ? 'meta' : parsedRef?.adSourcePlatform,
           whatsappMessageId: message.id,
         });
       }

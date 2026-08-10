@@ -1,0 +1,7 @@
+[Unit]
+Description=Chestone Postgres backup
+
+[Service]
+Type=oneshot
+User=azureuser
+ExecStart=/home/azureuser/backups/backup-postgres.sh

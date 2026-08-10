@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PROPERTY_AMENITY_VALUES, PROPERTY_STATUS_VALUES } from "@/lib/property-constants";
+import { PROPERTY_AMENITY_VALUES, PROPERTY_AREA_VALUES, PROPERTY_STATUS_VALUES } from "@/lib/property-constants";
 import type { Property } from "@/lib/types";
 import { useUsers } from "@/lib/queries/users";
 import { useCreateProperty, useUpdateProperty, type CreatePropertyPayload } from "@/lib/queries/properties";
@@ -141,8 +141,37 @@ export function PropertyForm({ property }: { property?: Property }) {
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="location">Location</Label>
-          <Input id="location" {...register("location")} />
+          <Label>Location</Label>
+          <Controller
+            control={control}
+            name="location"
+            render={({ field }) => {
+              // A property saved before this dropdown existed (or edited
+              // directly in the database) can carry a location outside the
+              // approved list -- show it as its own option rather than
+              // silently discarding it, so an admin can see what it
+              // currently is instead of it just vanishing on save.
+              const currentIsUnlisted =
+                field.value && !PROPERTY_AREA_VALUES.includes(field.value as (typeof PROPERTY_AREA_VALUES)[number]);
+              return (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select area" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currentIsUnlisted && (
+                      <SelectItem value={field.value as string}>{field.value} (not an approved area — please update)</SelectItem>
+                    )}
+                    {PROPERTY_AREA_VALUES.map((area) => (
+                      <SelectItem key={area} value={area}>
+                        {area}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              );
+            }}
+          />
         </div>
 
         <div className="flex flex-col gap-2">

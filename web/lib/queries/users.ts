@@ -46,3 +46,23 @@ export function useUpdateUser(id: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: usersKey }),
   });
 }
+
+// Self-service (agent SLA on-duty toggle) -- unlike useUsers, works for
+// every role since it only ever reads/writes the caller's own row.
+const ownProfileKey = ["users", "me"] as const;
+
+export function useOwnProfile() {
+  return useQuery({
+    queryKey: ownProfileKey,
+    queryFn: () => apiFetch<User>("/users/me"),
+  });
+}
+
+export function useUpdateOwnDuty() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (isOnDuty: boolean) =>
+      apiFetch<User>("/users/me/duty", { method: "PATCH", body: JSON.stringify({ isOnDuty }) }),
+    onSuccess: (updated) => queryClient.setQueryData(ownProfileKey, updated),
+  });
+}

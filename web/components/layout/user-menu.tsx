@@ -13,12 +13,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { AuthUser } from "@/lib/types";
 import { USER_ROLE_COLOR } from "@/lib/status-colors";
+import { useOwnProfile, useUpdateOwnDuty } from "@/lib/queries/users";
 
 export function UserMenu({ user }: { user: AuthUser }) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  // On-duty only matters for agents -- it's what the agent SLA engine's
+  // round-robin auto-assignment checks before routing an unclaimed lead.
+  const { data: profile } = useOwnProfile();
+  const updateDuty = useUpdateOwnDuty();
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -48,6 +54,19 @@ export function UserMenu({ user }: { user: AuthUser }) {
             Role <Badge variant={USER_ROLE_COLOR[user.role]}>{user.role}</Badge>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
+        {user.role === "agent" && (
+          <>
+            <DropdownMenuSeparator />
+            <label className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
+              On duty
+              <Checkbox
+                checked={profile?.isOnDuty ?? true}
+                disabled={!profile || updateDuty.isPending}
+                onCheckedChange={(next) => updateDuty.mutate(Boolean(next))}
+              />
+            </label>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout} disabled={loggingOut}>
           {loggingOut ? "Signing out..." : "Sign out"}

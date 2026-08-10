@@ -14,6 +14,11 @@ const GRAPH_API_BASE = 'https://graph.facebook.com/v25.0';
 
 interface QualifiedLeadEventInput {
   ctwaClid: string;
+  // Shared between this server-side CAPI call and any future client-side
+  // pixel/form event for the same lead, so Meta merges them into one
+  // conversion instead of double-counting -- lead_qual_<leadId> is stable
+  // and unique per lead, matching the CRM spec's event_id convention.
+  eventId: string;
   currency?: string;
   value?: number;
 }
@@ -46,6 +51,7 @@ export const dispatchQualifiedLeadEvent = async (input: QualifiedLeadEventInput)
         {
           event_name: 'Lead',
           event_time: Math.floor(Date.now() / 1000),
+          event_id: input.eventId,
           action_source: 'business_messaging',
           messaging_channel: 'whatsapp',
           user_data: {

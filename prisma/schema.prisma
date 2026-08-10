@@ -18,6 +18,8 @@ model User {
   lastLoginAt        DateTime?      @map("last_login_at") @db.Timestamptz(6)
   createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  isOnDuty           Boolean        @default(true) @map("is_on_duty")
+  lastLeadAssignedAt DateTime?      @map("last_lead_assigned_at") @db.Timestamptz(6)
   agentPenalties     AgentPenalty[]
   bookings           Booking[]
   leads              Lead[]
@@ -98,6 +100,8 @@ model Lead {
   dealStage           DealStage               @default(new) @map("deal_stage")
   propertyInterestRaw String?                 @map("property_interest_raw")
   ctwaClid            String?                 @map("ctwa_clid")
+  adSourceId          String?                 @map("ad_source_id")
+  adSourcePlatform    AdPlatform?             @map("ad_source_platform")
   agentPenalties      AgentPenalty[]
   bookings            Booking[]
   messages            LeadMessage[]
@@ -195,14 +199,14 @@ model AdRuleExecution {
 }
 
 model LeadMessage {
-  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  leadId            String               @map("lead_id") @db.Uuid
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId            String             @map("lead_id") @db.Uuid
   direction         MessageDirection
   body              String
-  whatsappMessageId String?              @map("whatsapp_message_id")
-  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  senderType        MessageSenderType?   @map("sender_type")
-  lead              Lead                 @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  whatsappMessageId String?            @map("whatsapp_message_id")
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  senderType        MessageSenderType? @map("sender_type")
+  lead              Lead               @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([leadId, createdAt], map: "idx_lead_messages_lead_created")
   @@map("lead_messages")

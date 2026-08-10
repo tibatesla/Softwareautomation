@@ -26,5 +26,13 @@ export const updateUserSchema = z.object({
   password: z.string().min(8).optional(),
 });
 
+// Self-service only (see updateOwnDutyStatus) -- deliberately just this one
+// field, never routed through updateUserSchema's owner-only path, so a
+// non-owner calling it can never touch role/isActive/password.
+export const updateOwnDutySchema = z.object({
+  isOnDuty: z.boolean(),
+});
+
 export type CreateUserPayload = z.infer<typeof createUserSchema>;
 export type UpdateUserPayload = z.infer<typeof updateUserSchema>;
+export type UpdateOwnDutyPayload = z.infer<typeof updateOwnDutySchema>;

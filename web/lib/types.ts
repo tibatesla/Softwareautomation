@@ -26,6 +26,7 @@ export interface User {
   fullName: string;
   role: UserRole;
   isActive: boolean;
+  isOnDuty: boolean;
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;

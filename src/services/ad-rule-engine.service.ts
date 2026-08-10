@@ -6,32 +6,56 @@
 // connected. Thresholds match the rag spec, which was concrete and never
 // in question (unlike the platform API shapes, which needed verification).
 //
-// KNOWN GAP: qualified_leads on ad_performance_logs requires attributing a
-// lead back to the specific ad that generated it (via ctwa_clid on Meta,
-// or platform-equivalent click IDs elsewhere) -- that attribution pass
-// isn't built yet, so qualified_leads is 0 for freshly ingested rows
-// until it is. CPQL-dependent rules (breach, winner-scale) simply don't
-// fire while it's 0 (cpql is null, same as the DB's generated column
-// behavior) -- the CTR-friction and zero-qualified kill switches don't
-// need it and work today.
+// qualified_leads on ad_performance_logs is written by ad-attribution.service.ts,
+// which increments the latest row for the ad a lead's WhatsApp referral
+// (source_id, when source_type is 'ad') points to. Coverage is currently
+// Meta CTWA ads only -- Google/TikTok don't have an equivalent inbound
+// referral to attribute from, so their rows stay at qualified_leads=0 and
+// cpql=null, and CPQL-dependent rules (breach, winner-scale) simply never
+// fire for them. Meta CTWA leads also won't be attributed if they message
+// organically (no referral) rather than clicking an ad.
 //
-// KNOWN GAP: domestic vs. diaspora CPQL caps require resolving each ad's
-// target segment (campaign naming convention or a lookup table), which
-// isn't wired in yet -- every ad currently evaluates against the domestic
-// cap. Add a segment resolution step before trusting the diaspora
-// KES 4,500 threshold in production.
+// Domestic vs. diaspora CPQL caps: resolved per-ad from the actual leads
+// attributed to that ad (Lead.adSourceId/adSourcePlatform, same link
+// ad-attribution.service.ts uses for qualified_leads) -- majority
+// targetSegment among an ad's attributed leads decides which cap applies.
+// No campaign-naming-convention parsing or manual lookup table needed;
+// this reuses data the attribution pass already produces. An ad with no
+// attributed leads yet (can't tell who it's reaching) falls back to the
+// stricter domestic cap, same as the prior no-segmentation behavior.
 import { withSystemContext } from '../config/database';
 import { AdProvider } from './system-secrets.service';
 import { enqueueAdAction, AdActionType } from '../queues/ad-action.queue';
 import { generateAdvisory } from './ad-ai-advisor.service';
+import { Prisma } from '../../generated/prisma';
 
 const DOMESTIC_CPQL_CAP = 2400;
+const DIASPORA_CPQL_CAP = 4500;
 const WINNER_CPQL_THRESHOLD = 1800;
 const WINNER_MIN_SPEND = 5000;
 const ZERO_QUALIFIED_SPEND_FLOOR = 3500;
 const CTR_FRICTION_THRESHOLD_PCT = 1.2;
 const CTR_FRICTION_SPEND_FLOOR = 2000;
 const AGGREGATION_WINDOW_HOURS = 48;
+
+type AdSegment = 'domestic' | 'diaspora';
+
+const resolveAdSegment = async (
+  tx: Prisma.TransactionClient,
+  platform: AdProvider,
+  adId: string,
+): Promise<AdSegment> => {
+  const counts = await tx.lead.groupBy({
+    by: ['targetSegment'],
+    where: { adSourcePlatform: platform, adSourceId: adId, targetSegment: { not: null } },
+    _count: true,
+  });
+
+  const diasporaCount = counts.find((c) => c.targetSegment === 'diaspora')?._count ?? 0;
+  const domesticCount = counts.find((c) => c.targetSegment === 'domestic')?._count ?? 0;
+
+  return diasporaCount > domesticCount ? 'diaspora' : 'domestic';
+};
 
 interface AdAggregate {
   platform: AdProvider;
@@ -49,9 +73,13 @@ interface RuleEvaluationResult {
   reason: string;
 }
 
-export const evaluateAd = (agg: Pick<AdAggregate, 'spend' | 'impressions' | 'clicks' | 'qualifiedLeads'>): RuleEvaluationResult => {
+export const evaluateAd = (
+  agg: Pick<AdAggregate, 'spend' | 'impressions' | 'clicks' | 'qualifiedLeads'>,
+  segment: AdSegment = 'domestic',
+): RuleEvaluationResult => {
   const ctr = agg.impressions > 0 ? (agg.clicks / agg.impressions) * 100 : 0;
   const cpql = agg.qualifiedLeads > 0 ? agg.spend / agg.qualifiedLeads : null;
+  const cpqlCap = segment === 'diaspora' ? DIASPORA_CPQL_CAP : DOMESTIC_CPQL_CAP;
 
   if (agg.spend >= CTR_FRICTION_SPEND_FLOOR && ctr < CTR_FRICTION_THRESHOLD_PCT) {
     return {
@@ -69,11 +97,11 @@ export const evaluateAd = (agg: Pick<AdAggregate, 'spend' | 'impressions' | 'cli
     };
   }
 
-  if (cpql !== null && cpql > DOMESTIC_CPQL_CAP) {
+  if (cpql !== null && cpql > cpqlCap) {
     return {
       action: 'throttle_50',
       ruleName: 'RULE_CPQL_BREACH',
-      reason: `CPQL reached KES ${cpql.toFixed(2)} (cap KES ${DOMESTIC_CPQL_CAP}).`,
+      reason: `CPQL reached KES ${cpql.toFixed(2)} (${segment} cap KES ${cpqlCap}).`,
     };
   }
 
@@ -127,7 +155,8 @@ export const runRuleEngine = async (): Promise<void> => {
         qualifiedLeads: group._sum.qualifiedLeads ?? 0,
       };
 
-      const result = evaluateAd(agg);
+      const segment = await resolveAdSegment(tx, agg.platform, agg.adId);
+      const result = evaluateAd(agg, segment);
 
       const performanceLog = await tx.adPerformanceLog.findFirst({
         where: { platform: agg.platform, campaignId: agg.campaignId, adId: agg.adId },

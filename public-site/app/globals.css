@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-navy: var(--navy);
+  --color-navy-dark: var(--navy-dark);
+  --color-navy-light: var(--navy-light);
+  --color-gold: var(--gold);
+  --color-gold-light: var(--gold-light);
+  --color-ivory: var(--ivory);
+  --color-ink: var(--ink);
+  --color-stone: var(--stone);
+  --font-serif: var(--font-playfair);
+  --font-sans: var(--font-inter);
+}
+
+:root {
+  --navy: #002b5b;
+  --navy-dark: #001c3d;
+  --navy-light: #003d7a;
+  --gold: #c5a059;
+  --gold-light: #d9bc84;
+  --ivory: #faf8f4;
+  --ink: #14213d;
+  --stone: #6b7280;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--ivory);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-serif);
+}
+
+::selection {
+  background: var(--gold);
+  color: var(--navy-dark);
+}
+
+/* Subtle gold underline accent, used under section headings */
+.gold-rule {
+  width: 56px;
+  height: 3px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-light));
+  border-radius: 2px;
+}
+
+.container-page {
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .container-page {
+    padding-inline: 2.5rem;
+  }
+}
+
+/* Horizontally-scrollable filter pill rows on mobile, with the scrollbar
+   itself hidden -- the row's own edge padding signals more content off-screen. */
+.scroll-pills {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scroll-pills::-webkit-scrollbar {
+  display: none;
+}

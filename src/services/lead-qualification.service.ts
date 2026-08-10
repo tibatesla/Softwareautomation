@@ -17,6 +17,7 @@ import { LeadTrackingService } from './tracking.service';
 import { sendWhatsAppText } from './whatsapp-cloud-api.service';
 import { generateBotReply } from './lead-ai-assistant.service';
 import { dispatchQualifiedLeadEvent } from './meta-capi.service';
+import { attributeQualifiedLead } from './ad-attribution.service';
 import { NormalizedInboundMessage } from '../schemas/whatsapp.schema';
 
 const tracking = new LeadTrackingService();
@@ -49,6 +50,11 @@ const POST_QUALIFICATION_FALLBACK =
 // days later) should get the bot's help immediately if the consultant
 // hasn't kept responding.
 const HUMAN_HANDOFF_WINDOW_MINUTES = 5;
+
+// Meta CAPI dedup guard (CRM spec): stops the same qualification from
+// firing a second "Lead" conversion event if this handler somehow runs
+// twice for the same lead (e.g. two webhook deliveries racing each other).
+const CAPI_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const firstMissingStep = (lead: Record<string, unknown>) =>
   QUALIFICATION_STEPS.find((step) => !lead[step.field]);
@@ -99,6 +105,8 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
   const countryCode = countryCallingCode ? `+${countryCallingCode}` : undefined;
   const displayName = message.senderName;
   const ctwaClid = message.ctwaClid;
+  const adSourceId = message.adSourceId;
+  const adSourcePlatform = message.adSourcePlatform;
 
   // The DB write and the outbound side effects (WhatsApp reply, Meta CAPI
   // dispatch) are deliberately NOT in the same transaction: withSystemContext
@@ -120,6 +128,8 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
           targetSegment,
           countryCode,
           ctwaClid,
+          adSourceId,
+          adSourcePlatform,
           qualificationStatus: 'qualifying',
         },
       });
@@ -187,6 +197,18 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
       updateData.qualificationStatus = 'qualified';
     }
 
+    // Dedup guard: only meaningfully reachable via a race (e.g. two inbound
+    // webhook deliveries for the same lead processed concurrently, both
+    // seeing "not yet qualified" before either commits) since a lead can
+    // otherwise only complete qualification once under this state machine
+    // -- but that race is real, and firing the same CAPI conversion twice
+    // would double-count it in Meta's own reporting.
+    const capiRecentlyFired =
+      justQualified && lead.lastCapiFiredAt ? Date.now() - lead.lastCapiFiredAt.getTime() < CAPI_DEDUP_WINDOW_MS : false;
+    if (justQualified && !capiRecentlyFired) {
+      updateData.lastCapiFiredAt = new Date();
+    }
+
     await tx.lead.update({ where: { id: lead.id }, data: updateData });
 
     const leadName = pendingStep.field === 'fullName' ? messageText : lead.fullName ?? undefined;
@@ -195,7 +217,14 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
       leadName,
       reply: nextStep ? nextStep.question : COMPLETION_MESSAGE,
       justQualified,
+      // Distinct from justQualified: attribution (our own dashboard) should
+      // still count this lead even on the rare dedup-skipped race, since
+      // that's unrelated to Meta's own conversion counting -- only the CAPI
+      // dispatch itself needs to skip.
+      shouldFireCapi: justQualified && !capiRecentlyFired,
       ctwaClid: lead.ctwaClid,
+      adSourceId: lead.adSourceId,
+      adSourcePlatform: lead.adSourcePlatform,
     };
   });
 
@@ -223,6 +252,12 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
   }
 
   if (outcome.justQualified) {
-    await dispatchQualifiedLeadEvent({ ctwaClid: outcome.ctwaClid || ctwaClid || '' });
+    if (outcome.shouldFireCapi) {
+      await dispatchQualifiedLeadEvent({
+        ctwaClid: outcome.ctwaClid || ctwaClid || '',
+        eventId: `lead_qual_${outcome.leadId}`,
+      });
+    }
+    await attributeQualifiedLead(outcome.adSourceId || adSourceId, outcome.adSourcePlatform || adSourcePlatform);
   }
 };

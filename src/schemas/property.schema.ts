@@ -3,6 +3,23 @@ import { z } from 'zod';
 
 export const propertyStatusValues = ['available', 'reserved', 'sold', 'off_market'] as const;
 
+// The client's approved focus areas -- also the exact set the public
+// website (chestoneproperties.com) filters listings down to. Enforced
+// here (not just on the public site) so a typo or an out-of-area entry
+// can no longer be saved in the first place, rather than silently
+// vanishing from the public site later with no warning to whoever
+// entered it. Matches the amenities list's pattern: a fixed list at the
+// API boundary, not a Postgres enum column, so adding an area later is a
+// one-line change here instead of a migration.
+export const propertyAreaValues = [
+  'Kilimani, Nairobi',
+  'Kileleshwa, Nairobi',
+  'Westlands, Nairobi',
+  'Lavington, Nairobi',
+  'Karen, Nairobi',
+  'Riverside, Nairobi',
+] as const;
+
 // Fixed amenity checklist (client-provided list, 37 items). Enforced at the
 // API boundary via zod rather than as a Postgres enum column, so adding a
 // new amenity later is a one-line change here instead of a migration --
@@ -50,7 +67,7 @@ export const propertyAmenityValues = [
 export const createPropertySchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  location: z.string().optional(),
+  location: z.enum(propertyAreaValues).optional(),
   price: z.number().nonnegative().optional(),
   currency: z.string().length(3).optional(),
   status: z.enum(propertyStatusValues).optional(),
