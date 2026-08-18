@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -10,14 +10,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useUpdatePayment } from "@/lib/queries/payments";
 import { ApiError } from "@/lib/api";
 import type { Payment } from "@/lib/types";
+import { PAYMENT_PAYER_TYPE_VALUES } from "@/lib/payment-constants";
+
+const PAYER_TYPE_LABEL: Record<(typeof PAYMENT_PAYER_TYPE_VALUES)[number], string> = {
+  lead: "Lead payment (deposit/installment)",
+  developer: "Developer commission",
+};
 
 const todayDateString = () => new Date().toISOString().slice(0, 10);
 
 const editFormSchema = z.object({
+  payerType: z.enum(PAYMENT_PAYER_TYPE_VALUES),
   amount: z.union([z.string(), z.number()]).refine((v) => Number(v) > 0, "Amount must be greater than 0"),
   currency: z.string().length(3),
   paymentMethod: z.string().optional(),
@@ -37,10 +45,12 @@ export function PaymentEditDialog({ payment }: { payment: Payment }) {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<EditFormValues>({
     resolver: zodResolver(editFormSchema),
     defaultValues: {
+      payerType: payment.payerType,
       amount: payment.amount,
       currency: payment.currency,
       paymentMethod: payment.paymentMethod ?? "",
@@ -52,6 +62,7 @@ export function PaymentEditDialog({ payment }: { payment: Payment }) {
   const onSubmit = async (values: EditFormValues) => {
     try {
       await updatePayment.mutateAsync({
+        payerType: values.payerType,
         amount: Number(values.amount),
         currency: values.currency,
         paymentMethod: values.paymentMethod || undefined,
@@ -77,6 +88,32 @@ export function PaymentEditDialog({ payment }: { payment: Payment }) {
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label>Who paid?</Label>
+            <Controller
+              control={control}
+              name="payerType"
+              render={({ field }) => (
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  items={Object.fromEntries(PAYMENT_PAYER_TYPE_VALUES.map((type) => [type, PAYER_TYPE_LABEL[type]]))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_PAYER_TYPE_VALUES.map((type) => (
+                      <SelectItem key={type} value={type} label={PAYER_TYPE_LABEL[type]}>
+                        {PAYER_TYPE_LABEL[type]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="edit-amount">Amount</Label>

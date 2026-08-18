@@ -1,6 +1,7 @@
 import type { PROPERTY_AMENITY_VALUES, PROPERTY_STATUS_VALUES } from "@/lib/property-constants";
 import type { DEAL_STAGE_VALUES, LEAD_QUALIFICATION_STATUS_VALUES, LEAD_SEGMENT_VALUES } from "@/lib/lead-constants";
 import type { BOOKING_STATUS_VALUES } from "@/lib/booking-constants";
+import type { PAYMENT_PAYER_TYPE_VALUES } from "@/lib/payment-constants";
 
 export type UserRole = "owner" | "admin" | "agent";
 
@@ -67,6 +68,8 @@ export interface AdRuleExecution {
   executedAt: string;
 }
 
+export type PaymentPayerType = (typeof PAYMENT_PAYER_TYPE_VALUES)[number];
+
 export interface Payment {
   id: string;
   propertyId: string;
@@ -77,6 +80,7 @@ export interface Payment {
   paymentDate: string;
   recordedBy: string;
   notes: string | null;
+  payerType: PaymentPayerType;
   createdAt: string;
 }
 

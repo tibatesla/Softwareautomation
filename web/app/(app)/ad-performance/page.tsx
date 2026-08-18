@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AD_PLATFORM_COLOR } from "@/lib/status-colors";
+import { formatCurrency } from "@/lib/utils";
 
 const PLATFORMS: AdPlatform[] = ["meta", "google", "tiktok"];
 
@@ -43,9 +44,7 @@ function PerformanceTable({ platform }: { platform?: AdPlatform }) {
               </TableCell>
               <TableCell className="max-w-40 truncate">{log.campaignId}</TableCell>
               <TableCell className="max-w-40 truncate">{log.adId}</TableCell>
-              <TableCell>
-                {new Intl.NumberFormat("en-KE", { style: "currency", currency: log.currency, maximumFractionDigits: 0 }).format(Number(log.spend))}
-              </TableCell>
+              <TableCell>{formatCurrency(log.spend, log.currency)}</TableCell>
               <TableCell>{log.impressions}</TableCell>
               <TableCell>{log.clicks}</TableCell>
               <TableCell>{log.ctr ? `${log.ctr}%` : "—"}</TableCell>
@@ -128,14 +127,18 @@ export default function AdPerformancePage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Ad Performance</h1>
-        <Select value={platform ?? "all"} onValueChange={(v) => setPlatform(v === "all" ? undefined : (v as AdPlatform))}>
+        <Select
+          value={platform ?? "all"}
+          onValueChange={(v) => setPlatform(v === "all" ? undefined : (v as AdPlatform))}
+          items={{ all: "All platforms", ...Object.fromEntries(PLATFORMS.map((p) => [p, p])) }}
+        >
           <SelectTrigger className="w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All platforms</SelectItem>
+            <SelectItem value="all" label="All platforms">All platforms</SelectItem>
             {PLATFORMS.map((p) => (
-              <SelectItem key={p} value={p}>
+              <SelectItem key={p} value={p} label={p}>
                 {p}
               </SelectItem>
             ))}

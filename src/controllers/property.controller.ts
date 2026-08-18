@@ -2,6 +2,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { withRLSContext } from '../config/database';
+import { Prisma } from '../../generated/prisma';
 import { createPropertySchema, updatePropertySchema } from '../schemas/property.schema';
 import { uploadMediaBuffer, deletePropertyMedia, publicIdFromUrl } from '../services/cloudinary.service';
 import { resourceTypeForMimetype } from '../middlewares/upload.middleware';
@@ -36,11 +37,71 @@ export const createProperty = async (req: AuthenticatedRequest, res: Response): 
   }
 
   const { id, role } = req.user!;
-  const property = await withRLSContext(id, role, (tx) =>
-    tx.property.create({ data: { ...parseResult.data, createdBy: id } }),
-  );
+  try {
+    const property = await withRLSContext(id, role, (tx) =>
+      tx.property.create({ data: { ...parseResult.data, createdBy: id } }),
+    );
+    res.status(201).json(property);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      res.status(409).json({ error: 'Reference ID is already in use by another property.' });
+      return;
+    }
+    throw error;
+  }
+};
 
-  res.status(201).json(property);
+/**
+ * Blocked if any leads/bookings/payments still reference this property --
+ * those all have NoAction (restrict) foreign keys, so the DELETE would fail
+ * regardless; checking first lets us return a clear, itemized 409 instead
+ * of a raw constraint-violation error.
+ */
+export const deleteProperty = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id, role } = req.user!;
+  const propertyId = req.params.id;
+
+  try {
+    const linked = await withRLSContext(id, role, (tx) =>
+      tx.property.findUnique({
+        where: { id: propertyId },
+        select: {
+          images: true,
+          videos: true,
+          _count: { select: { leads: true, bookings: true, payments: true } },
+        },
+      }),
+    );
+
+    if (!linked) {
+      res.status(404).json({ error: 'Property not found' });
+      return;
+    }
+
+    const linkedCounts = Object.entries(linked._count).filter(([, count]) => count > 0);
+    if (linkedCounts.length > 0) {
+      const summary = linkedCounts.map(([name, count]) => `${count} ${name}`).join(', ');
+      res.status(409).json({
+        error: `Can't delete -- this property has linked records (${summary}). Mark it as sold/unavailable instead to preserve that history.`,
+      });
+      return;
+    }
+
+    await withRLSContext(id, role, (tx) => tx.property.delete({ where: { id: propertyId } }));
+
+    for (const url of [...linked.images, ...linked.videos]) {
+      const publicId = publicIdFromUrl(url);
+      if (!publicId) continue;
+      const resourceType = url.includes('/video/upload/') ? 'video' : 'image';
+      deletePropertyMedia(publicId, resourceType).catch((error) =>
+        console.error('[Property] Cloudinary cleanup failed for deleted property (DB already updated):', error),
+      );
+    }
+
+    res.status(204).send();
+  } catch {
+    res.status(404).json({ error: 'Property not found' });
+  }
 };
 
 export const updateProperty = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -57,7 +118,11 @@ export const updateProperty = async (req: AuthenticatedRequest, res: Response): 
       tx.property.update({ where: { id: req.params.id }, data: parseResult.data }),
     );
     res.status(200).json(property);
-  } catch {
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      res.status(409).json({ error: 'Reference ID is already in use by another property.' });
+      return;
+    }
     res.status(404).json({ error: 'Property not found' });
   }
 };

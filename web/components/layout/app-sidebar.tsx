@@ -13,6 +13,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { UserMenu } from "@/components/layout/user-menu";
 import { hasRole, type AuthUser } from "@/lib/types";
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 export function AppSidebar({ user }: { user: AuthUser }) {
   const pathname = usePathname();
+  const { isMobile, setOpenMobile } = useSidebar();
   // Icon components can't cross the server->client prop boundary, so
   // NAV_ITEMS (which holds Lucide component references) is imported and
   // role-filtered here on the client, rather than passed down from the
@@ -49,7 +51,10 @@ export function AppSidebar({ user }: { user: AuthUser }) {
                 const Icon = item.icon;
                 return (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton render={<Link href={item.href} />} isActive={isActive}>
+                    <SidebarMenuButton
+                      render={<Link href={item.href} onClick={() => isMobile && setOpenMobile(false)} />}
+                      isActive={isActive}
+                    >
                       <Icon className={cn("size-4", !isActive && item.iconClassName)} />
                       {item.label}
                     </SidebarMenuButton>

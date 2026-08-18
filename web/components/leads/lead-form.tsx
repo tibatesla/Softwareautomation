@@ -130,13 +130,17 @@ export function LeadForm({ lead }: { lead?: Lead }) {
             control={control}
             name="propertyId"
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                items={Object.fromEntries((properties ?? []).map((property) => [property.id, property.title]))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="None" />
                 </SelectTrigger>
                 <SelectContent>
                   {properties?.map((property) => (
-                    <SelectItem key={property.id} value={property.id}>
+                    <SelectItem key={property.id} value={property.id} label={property.title}>
                       {property.title}
                     </SelectItem>
                   ))}
@@ -152,13 +156,17 @@ export function LeadForm({ lead }: { lead?: Lead }) {
             control={control}
             name="qualificationStatus"
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                items={Object.fromEntries(LEAD_QUALIFICATION_STATUS_VALUES.map((status) => [status, status]))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
                   {LEAD_QUALIFICATION_STATUS_VALUES.map((status) => (
-                    <SelectItem key={status} value={status}>
+                    <SelectItem key={status} value={status} label={status}>
                       {status}
                     </SelectItem>
                   ))}
@@ -174,13 +182,17 @@ export function LeadForm({ lead }: { lead?: Lead }) {
             control={control}
             name="dealStage"
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                items={Object.fromEntries(DEAL_STAGE_VALUES.map((stage) => [stage, stage.replace(/_/g, " ")]))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select stage" />
                 </SelectTrigger>
                 <SelectContent>
                   {DEAL_STAGE_VALUES.map((stage) => (
-                    <SelectItem key={stage} value={stage}>
+                    <SelectItem key={stage} value={stage} label={stage.replace(/_/g, " ")}>
                       {stage.replace(/_/g, " ")}
                     </SelectItem>
                   ))}
@@ -196,13 +208,17 @@ export function LeadForm({ lead }: { lead?: Lead }) {
             control={control}
             name="targetSegment"
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                items={Object.fromEntries(LEAD_SEGMENT_VALUES.map((segment) => [segment, segment]))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select segment" />
                 </SelectTrigger>
                 <SelectContent>
                   {LEAD_SEGMENT_VALUES.map((segment) => (
-                    <SelectItem key={segment} value={segment}>
+                    <SelectItem key={segment} value={segment} label={segment}>
                       {segment}
                     </SelectItem>
                   ))}

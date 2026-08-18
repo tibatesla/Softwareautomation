@@ -47,6 +47,19 @@ export function useUpdateUser(id: string) {
   });
 }
 
+// Fails with a specific 409 message (via ApiError) if the account has any
+// linked leads/properties/payments/bookings/penalties -- those are all
+// NoAction foreign keys, so the backend checks first rather than letting a
+// raw constraint violation surface. Deactivation (useUpdateUser with
+// isActive: false) is the fallback for any account with real history.
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`/users/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: usersKey }),
+  });
+}
+
 // Self-service (agent SLA on-duty toggle) -- unlike useUsers, works for
 // every role since it only ever reads/writes the caller's own row.
 const ownProfileKey = ["users", "me"] as const;

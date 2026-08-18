@@ -79,13 +79,17 @@ export function UserEditDialog({ user }: { user: User }) {
               control={control}
               name="role"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  items={Object.fromEntries(MANAGEABLE_USER_ROLE_VALUES.map((role) => [role, role]))}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {MANAGEABLE_USER_ROLE_VALUES.map((role) => (
-                      <SelectItem key={role} value={role}>
+                      <SelectItem key={role} value={role} label={role}>
                         {role}
                       </SelectItem>
                     ))}

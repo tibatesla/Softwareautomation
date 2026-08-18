@@ -118,19 +118,20 @@ model Lead {
 }
 
 model Payment {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  propertyId    String   @map("property_id") @db.Uuid
-  leadId        String?  @map("lead_id") @db.Uuid
-  amount        Decimal  @db.Decimal(14, 2)
-  currency      String   @default("KES") @db.Char(3)
-  paymentMethod String?  @map("payment_method")
-  paymentDate   DateTime @default(dbgenerated("CURRENT_DATE")) @map("payment_date") @db.Date
-  recordedBy    String   @map("recorded_by") @db.Uuid
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  propertyId    String           @map("property_id") @db.Uuid
+  leadId        String?          @map("lead_id") @db.Uuid
+  amount        Decimal          @db.Decimal(14, 2)
+  currency      String           @default("KES") @db.Char(3)
+  paymentMethod String?          @map("payment_method")
+  paymentDate   DateTime         @default(dbgenerated("CURRENT_DATE")) @map("payment_date") @db.Date
+  recordedBy    String           @map("recorded_by") @db.Uuid
   notes         String?
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  lead          Lead?    @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  property      Property @relation(fields: [propertyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  recorder      User     @relation(fields: [recordedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  payerType     PaymentPayerType @default(lead) @map("payer_type")
+  lead          Lead?            @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  property      Property         @relation(fields: [propertyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recorder      User             @relation(fields: [recordedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([leadId], map: "idx_payments_lead")
   @@index([propertyId], map: "idx_payments_property")
@@ -335,4 +336,11 @@ enum MessageSenderType {
   human
 
   @@map("message_sender_type")
+}
+
+enum PaymentPayerType {
+  lead
+  developer
+
+  @@map("payment_payer_type")
 }

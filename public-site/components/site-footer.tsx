@@ -87,6 +87,11 @@ export function SiteFooter() {
                 Browse all listings →
               </Link>
             </li>
+            <li>
+              <Link href="/faq" className="transition-colors hover:text-gold">
+                Frequently asked questions →
+              </Link>
+            </li>
           </ul>
 
           <div className="mt-5 flex items-center gap-3">

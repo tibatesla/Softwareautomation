@@ -90,6 +90,70 @@ export const updateUser = async (req: AuthenticatedRequest, res: Response): Prom
 };
 
 /**
+ * Owner-only (route + the bare users_owner_admin_all RLS policy, which
+ * applies to all commands including DELETE once granted). Every relation
+ * on User is a NoAction foreign key, so Postgres would reject this anyway
+ * for a user with any history -- checked explicitly first so the caller
+ * gets a clear, specific reason instead of a raw FK-violation error, and
+ * so a user with real history can be pointed at deactivation instead.
+ */
+export const deleteUser = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id, role } = req.user!;
+  const targetId = req.params.id;
+
+  if (targetId === id) {
+    res.status(400).json({ error: "Can't delete your own account." });
+    return;
+  }
+
+  try {
+    const linked = await withRLSContext(id, role, (tx) =>
+      tx.user.findUnique({
+        where: { id: targetId },
+        select: {
+          role: true,
+          _count: {
+            select: {
+              agentPenalties: true,
+              bookings: true,
+              leads: true,
+              payments: true,
+              assignedProperties: true,
+              createdProperties: true,
+              rotatedSecrets: true,
+            },
+          },
+        },
+      }),
+    );
+
+    if (!linked) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    if (linked.role === 'owner') {
+      res.status(400).json({ error: "Can't delete an Owner account." });
+      return;
+    }
+
+    const linkedCounts = Object.entries(linked._count).filter(([, count]) => count > 0);
+    if (linkedCounts.length > 0) {
+      const summary = linkedCounts.map(([name, count]) => `${count} ${name}`).join(', ');
+      res.status(409).json({
+        error: `Can't delete -- this user has linked records (${summary}). Deactivate the account instead to preserve that history.`,
+      });
+      return;
+    }
+
+    await withRLSContext(id, role, (tx) => tx.user.delete({ where: { id: targetId } }));
+    res.status(204).send();
+  } catch {
+    res.status(404).json({ error: 'User not found' });
+  }
+};
+
+/**
  * Self-service: any authenticated user can read their own record. Not
  * behind requireRole('owner','admin') like GET /:id -- an agent has no
  * other way to see their own isOnDuty state (the agent SLA cron is the

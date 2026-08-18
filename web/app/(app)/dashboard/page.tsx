@@ -14,6 +14,21 @@ import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LEAD_QUALIFICATION_STATUS_VALUES } from "@/lib/lead-constants";
+import { PROPERTY_AREA_VALUES } from "@/lib/property-constants";
+import { formatCurrency } from "@/lib/utils";
+
+/** Groups properties by their approved area (first segment of "Area, Nairobi"),
+ * with anything outside the approved list bucketed as "Other" rather than
+ * silently dropped -- covers legacy/demo rows that predate the area dropdown. */
+function propertiesByArea(properties: { location: string | null }[] | undefined) {
+  const counts = PROPERTY_AREA_VALUES.map((area) => ({
+    area: area.split(",")[0],
+    count: properties?.filter((p) => p.location === area).length ?? 0,
+  }));
+  const otherCount = properties?.filter((p) => !p.location || !(PROPERTY_AREA_VALUES as readonly string[]).includes(p.location)).length ?? 0;
+  if (otherCount > 0) counts.push({ area: "Other", count: otherCount });
+  return counts;
+}
 
 function AgentDashboard({ userId }: { userId: string }) {
   const { data: leads } = useLeads();
@@ -96,6 +111,8 @@ function OwnerAdminDashboard() {
     count: leads?.filter((l) => l.qualificationStatus === status).length ?? 0,
   }));
 
+  const areaData = propertiesByArea(properties);
+
   const months = Array.from({ length: 6 }, (_, i) => subMonths(new Date(), 5 - i));
   const paymentsTrend = months.map((month) => {
     const total =
@@ -110,6 +127,7 @@ function OwnerAdminDashboard() {
 
   const leadChartConfig: ChartConfig = { count: { label: "Leads", color: "var(--chart-1)" } };
   const paymentsChartConfig: ChartConfig = { total: { label: "Payments (KES)", color: "var(--chart-3)" } };
+  const areaChartConfig: ChartConfig = { count: { label: "Properties", color: "var(--chart-2)" } };
 
   return (
     <div className="flex flex-col gap-6">
@@ -128,18 +146,8 @@ function OwnerAdminDashboard() {
           icon={Contact}
           color="info"
         />
-        <StatCard
-          label="Payments this month"
-          value={new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(monthlyPayments)}
-          icon={Wallet}
-          color="success"
-        />
-        <StatCard
-          label="Ad spend (recent logs)"
-          value={new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(totalSpend)}
-          icon={Megaphone}
-          color="warning"
-        />
+        <StatCard label="Payments this month" value={formatCurrency(monthlyPayments)} icon={Wallet} color="success" />
+        <StatCard label="Ad spend (recent logs)" value={formatCurrency(totalSpend)} icon={Megaphone} color="warning" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -179,6 +187,24 @@ function OwnerAdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Properties by area</CardTitle>
+          <CardDescription>How the portfolio is distributed across your focus areas</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer config={areaChartConfig} className="aspect-auto h-64 w-full">
+            <BarChart data={areaData} layout="vertical" margin={{ left: 8 }}>
+              <CartesianGrid horizontal={false} />
+              <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+              <YAxis type="category" dataKey="area" tickLine={false} axisLine={false} width={90} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <Bar dataKey="count" fill="var(--color-count)" radius={4} />
+            </BarChart>
+          </ChartContainer>
+        </CardContent>
+      </Card>
     </div>
   );
 }

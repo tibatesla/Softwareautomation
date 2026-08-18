@@ -80,13 +80,17 @@ export function BookingForm({ defaultDate }: { defaultDate?: Date }) {
           control={control}
           name="propertyId"
           render={({ field }) => (
-            <Select value={field.value} onValueChange={field.onChange}>
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+              items={Object.fromEntries((properties ?? []).map((property) => [property.id, property.title]))}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select property" />
               </SelectTrigger>
               <SelectContent>
                 {properties?.map((property) => (
-                  <SelectItem key={property.id} value={property.id}>
+                  <SelectItem key={property.id} value={property.id} label={property.title}>
                     {property.title}
                   </SelectItem>
                 ))}
@@ -103,13 +107,17 @@ export function BookingForm({ defaultDate }: { defaultDate?: Date }) {
           control={control}
           name="leadId"
           render={({ field }) => (
-            <Select value={field.value} onValueChange={field.onChange}>
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+              items={Object.fromEntries((leads ?? []).map((lead) => [lead.id, lead.fullName ?? lead.phoneNumber]))}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="None" />
               </SelectTrigger>
               <SelectContent>
                 {leads?.map((lead) => (
-                  <SelectItem key={lead.id} value={lead.id}>
+                  <SelectItem key={lead.id} value={lead.id} label={lead.fullName ?? lead.phoneNumber}>
                     {lead.fullName ?? lead.phoneNumber}
                   </SelectItem>
                 ))}
@@ -126,13 +134,17 @@ export function BookingForm({ defaultDate }: { defaultDate?: Date }) {
             control={control}
             name="agentId"
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                items={Object.fromEntries(agents.map((agent) => [agent.id, agent.fullName]))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Self" />
                 </SelectTrigger>
                 <SelectContent>
                   {agents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
+                    <SelectItem key={agent.id} value={agent.id} label={agent.fullName}>
                       {agent.fullName}
                     </SelectItem>
                   ))}

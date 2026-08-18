@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDeletePropertyMedia, useUploadPropertyMedia } from "@/lib/queries/properties";
 import { ApiError } from "@/lib/api";
@@ -38,6 +39,7 @@ export function MediaGallery({
   };
 
   const handleDelete = async (url: string) => {
+    if (!window.confirm("Remove this photo/video? This can't be undone.")) return;
     try {
       await deleteMedia.mutateAsync(url);
       toast.success("Media removed");
@@ -87,11 +89,12 @@ export function MediaGallery({
                 type="button"
                 variant="destructive"
                 size="icon-sm"
-                className="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100"
+                aria-label="Remove"
+                className="absolute right-1 top-1 shadow-sm"
                 onClick={() => handleDelete(url)}
                 disabled={deleteMedia.isPending}
               >
-                x
+                <Trash2 className="size-3.5" />
               </Button>
             )}
           </div>
@@ -105,11 +108,12 @@ export function MediaGallery({
                 type="button"
                 variant="destructive"
                 size="icon-sm"
-                className="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100"
+                aria-label="Remove"
+                className="absolute right-1 top-1 shadow-sm"
                 onClick={() => handleDelete(url)}
                 disabled={deleteMedia.isPending}
               >
-                x
+                <Trash2 className="size-3.5" />
               </Button>
             )}
           </div>

@@ -1,5 +1,10 @@
 // src/app.ts
-import express, { Application, Request, Response } from 'express';
+// Must be imported before any route modules: patches Express 4's router so
+// a rejected promise from an async handler reaches the error middleware
+// below instead of leaving the request hanging forever (see the handler's
+// comment for why that matters).
+import 'express-async-errors';
+import express, { Application, NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import authRoutes from './routes/auth.routes';
@@ -63,6 +68,19 @@ app.use('/api/public/properties', publicPropertyRoutes);
 // Fallback for unhandled routes
 app.use((req: Request, res: Response) => {
   res.status(404).json({ error: 'Endpoint not found.' });
+});
+
+// Catch-all error handler -- Express 4 does not catch rejected promises from
+// async route handlers on its own, so a controller that throws without its
+// own try/catch would otherwise hang the request forever (no response ever
+// sent) until the reverse proxy's own timeout kills the connection. This is
+// the last line of defense; controllers should still handle expected error
+// cases (validation, not-found, conflicts) explicitly for a useful response.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+  console.error('[Unhandled error]', err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'Internal server error.' });
 });
 
 export default app;

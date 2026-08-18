@@ -44,13 +44,14 @@ function BookingStatusSelect({ booking }: { booking: Booking }) {
           toast.error(message);
         }
       }}
+      items={Object.fromEntries(BOOKING_STATUS_VALUES.map((status) => [status, status.replace("_", " ")]))}
     >
       <SelectTrigger className={cn("w-36", STATUS_TRIGGER_CLASS[booking.status])}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {BOOKING_STATUS_VALUES.map((status) => (
-          <SelectItem key={status} value={status}>
+          <SelectItem key={status} value={status} label={status.replace("_", " ")}>
             {status.replace("_", " ")}
           </SelectItem>
         ))}

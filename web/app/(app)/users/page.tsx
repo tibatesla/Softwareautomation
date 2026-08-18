@@ -1,10 +1,12 @@
 "use client";
 
 import { toast } from "sonner";
-import { useUpdateUser, useUsers } from "@/lib/queries/users";
+import { Trash2 } from "lucide-react";
+import { useDeleteUser, useUpdateUser, useUsers } from "@/lib/queries/users";
 import { UserDialog } from "@/components/users/user-dialog";
 import { UserEditDialog } from "@/components/users/user-edit-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ApiError } from "@/lib/api";
@@ -20,6 +22,7 @@ const ROLE_TRIGGER_CLASS: Record<UserRole, string> = {
 
 function UserRow({ user }: { user: User }) {
   const updateUser = useUpdateUser(user.id);
+  const deleteUser = useDeleteUser();
 
   // The Owner account is protected from this UI entirely -- no role change,
   // no deactivation, no edit. There must always be exactly one Owner, and
@@ -47,6 +50,20 @@ function UserRow({ user }: { user: User }) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete ${user.fullName}? This can't be undone.`)) return;
+    try {
+      await deleteUser.mutateAsync(user.id);
+      toast.success("User deleted");
+    } catch (error) {
+      // Most likely a 409 explaining which linked records are blocking it
+      // (see deleteUser in user.controller.ts) -- surfaced verbatim since
+      // it already tells the owner to deactivate instead.
+      const message = error instanceof ApiError ? error.message : "Failed to delete user";
+      toast.error(message);
+    }
+  };
+
   return (
     <TableRow>
       <TableCell className="font-medium">{user.fullName}</TableCell>
@@ -55,13 +72,17 @@ function UserRow({ user }: { user: User }) {
         {isOwner ? (
           <Badge variant="purple">owner</Badge>
         ) : (
-          <Select value={user.role} onValueChange={handleRoleChange}>
+          <Select
+            value={user.role}
+            onValueChange={handleRoleChange}
+            items={Object.fromEntries(MANAGEABLE_USER_ROLE_VALUES.map((role) => [role, role]))}
+          >
             <SelectTrigger className={cn("w-28", ROLE_TRIGGER_CLASS[user.role])}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {MANAGEABLE_USER_ROLE_VALUES.map((role) => (
-                <SelectItem key={role} value={role}>
+                <SelectItem key={role} value={role} label={role}>
                   {role}
                 </SelectItem>
               ))}
@@ -79,7 +100,23 @@ function UserRow({ user }: { user: User }) {
         </Badge>
       </TableCell>
       <TableCell>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : "Never"}</TableCell>
-      <TableCell>{!isOwner && <UserEditDialog user={user} />}</TableCell>
+      <TableCell>
+        {!isOwner && (
+          <div className="flex items-center gap-1">
+            <UserEditDialog user={user} />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Delete user"
+              onClick={handleDelete}
+              disabled={deleteUser.isPending}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        )}
+      </TableCell>
     </TableRow>
   );
 }

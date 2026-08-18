@@ -30,6 +30,15 @@ async function forward(
   }
 
   const backendResponse = await fetch(targetUrl, init);
+
+  // 204/205/304 are "null body" statuses per the Fetch spec -- the Response
+  // constructor throws if given a body at all, even an empty string, so
+  // these can't fall through to the text/JSON branches below (a DELETE
+  // endpoint returning 204 with no body is exactly this case).
+  if ([204, 205, 304].includes(backendResponse.status)) {
+    return new Response(null, { status: backendResponse.status });
+  }
+
   const contentType = backendResponse.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {

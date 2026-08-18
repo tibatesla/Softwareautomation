@@ -79,11 +79,18 @@ const penalizeAndReopenSilentClaims = async (tx: Prisma.TransactionClient): Prom
   // are fetched first and checked individually below.
   const candidates = await tx.lead.findMany({
     where: { qualificationStatus: 'qualified', claimedByAgentId: { not: null }, claimedAt: { lte: cutoff } },
-    select: { id: true, claimedByAgentId: true, claimedAt: true },
+    select: { id: true, claimedByAgentId: true, claimedAt: true, dealStage: true },
   });
 
   let penalized = 0;
   for (const lead of candidates) {
+    // A lead whose deal has moved past 'new' has demonstrable agent
+    // engagement (site visit booked, offer signed, deposit/commission
+    // paid, etc.) even when that work never produced a tracked
+    // LeadMessage row -- treating it as a silent claim here would
+    // falsely and endlessly penalize agents who are actively closing it.
+    if (lead.dealStage !== 'new') continue;
+
     const hasHumanReply = await tx.leadMessage.findFirst({
       where: {
         leadId: lead.id,

@@ -35,6 +35,13 @@ export function StatCard({
   color?: StatCardColor;
   className?: string;
 }) {
+  // Large formatted currency values (e.g. "KES 65,000,000") are long enough
+  // that a fixed text-2xl silently ellipsis-clips digits -- shrink the font
+  // instead of just truncating, so the full number stays readable. `title`
+  // is a fallback if it's still cut off on a very narrow viewport.
+  const valueText = typeof value === "string" || typeof value === "number" ? String(value) : undefined;
+  const isLongValue = (valueText?.length ?? 0) > 10;
+
   return (
     <Card className={cn("gap-3 border-t-4", BORDER_CLASSES[color], className)}>
       <CardContent className="flex items-center gap-2.5 px-3 py-1 sm:gap-4 sm:px-4">
@@ -48,7 +55,15 @@ export function StatCard({
         </div>
         <div className="flex min-w-0 flex-col">
           <span className="truncate text-xs font-medium text-muted-foreground">{label}</span>
-          <span className="truncate text-lg font-semibold tabular-nums sm:text-2xl">{value}</span>
+          <span
+            className={cn(
+              "truncate font-semibold tabular-nums",
+              isLongValue ? "text-base sm:text-lg" : "text-lg sm:text-2xl",
+            )}
+            title={valueText}
+          >
+            {value}
+          </span>
           {description && <span className="truncate text-xs text-muted-foreground">{description}</span>}
         </div>
       </CardContent>

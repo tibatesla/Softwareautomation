@@ -104,8 +104,20 @@ export function PropertyForm({ property }: { property?: Property }) {
   });
 
   const onSubmit = async (values: PropertyFormValues) => {
+    // A property saved before the area dropdown existed can carry a
+    // location outside the approved list (shown as its own flagged option
+    // in the Select, see below) -- if the user leaves it untouched, don't
+    // resubmit it: the backend's strict enum would reject the whole update
+    // over an unrelated field. Only send location when it's empty or one
+    // of the approved values, i.e. the user actually picked from the list.
+    const location =
+      !values.location || PROPERTY_AREA_VALUES.includes(values.location as (typeof PROPERTY_AREA_VALUES)[number])
+        ? values.location
+        : undefined;
+
     const payload: CreatePropertyPayload = {
       ...values,
+      location,
       price: toNumber(values.price),
       priceMin: toNumber(values.priceMin),
       priceMax: toNumber(values.priceMax),
@@ -114,6 +126,7 @@ export function PropertyForm({ property }: { property?: Property }) {
       houseSizeSqft: toNumber(values.houseSizeSqft),
       assignedAgentId: values.assignedAgentId || undefined,
       developerEmail: values.developerEmail || undefined,
+      referenceId: values.referenceId || undefined,
     };
 
     try {
@@ -153,17 +166,23 @@ export function PropertyForm({ property }: { property?: Property }) {
               // currently is instead of it just vanishing on save.
               const currentIsUnlisted =
                 field.value && !PROPERTY_AREA_VALUES.includes(field.value as (typeof PROPERTY_AREA_VALUES)[number]);
+              const areaItems: Record<string, string> = Object.fromEntries(PROPERTY_AREA_VALUES.map((area) => [area, area]));
+              if (currentIsUnlisted) {
+                areaItems[field.value as string] = `${field.value} (not an approved area — please update)`;
+              }
               return (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value} onValueChange={field.onChange} items={areaItems}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select area" />
                   </SelectTrigger>
                   <SelectContent>
                     {currentIsUnlisted && (
-                      <SelectItem value={field.value as string}>{field.value} (not an approved area — please update)</SelectItem>
+                      <SelectItem value={field.value as string} label={field.value as string}>
+                        {field.value} (not an approved area — please update)
+                      </SelectItem>
                     )}
                     {PROPERTY_AREA_VALUES.map((area) => (
-                      <SelectItem key={area} value={area}>
+                      <SelectItem key={area} value={area} label={area}>
                         {area}
                       </SelectItem>
                     ))}
@@ -190,13 +209,17 @@ export function PropertyForm({ property }: { property?: Property }) {
             control={control}
             name="status"
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                items={Object.fromEntries(PROPERTY_STATUS_VALUES.map((status) => [status, status.replace("_", " ")]))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
                   {PROPERTY_STATUS_VALUES.map((status) => (
-                    <SelectItem key={status} value={status}>
+                    <SelectItem key={status} value={status} label={status.replace("_", " ")}>
                       {status.replace("_", " ")}
                     </SelectItem>
                   ))}
@@ -212,13 +235,17 @@ export function PropertyForm({ property }: { property?: Property }) {
             control={control}
             name="assignedAgentId"
             render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                items={Object.fromEntries(agents.map((agent) => [agent.id, agent.fullName]))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Unassigned" />
                 </SelectTrigger>
                 <SelectContent>
                   {agents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
+                    <SelectItem key={agent.id} value={agent.id} label={agent.fullName}>
                       {agent.fullName}
                     </SelectItem>
                   ))}
@@ -262,7 +289,7 @@ export function PropertyForm({ property }: { property?: Property }) {
           <Input id="levelFloors" type="number" {...register("levelFloors")} />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="houseSizeSqft">House size (sqft)</Label>
+          <Label htmlFor="houseSizeSqft">House size (sqm)</Label>
           <Input id="houseSizeSqft" type="number" step="0.01" {...register("houseSizeSqft")} />
         </div>
         <div className="flex flex-col gap-2">
@@ -279,19 +306,22 @@ export function PropertyForm({ property }: { property?: Property }) {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="developerContactName">Developer contact name</Label>
-          <Input id="developerContactName" {...register("developerContactName")} />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="developerEmail">Developer email</Label>
-          <Input id="developerEmail" type="email" {...register("developerEmail")} />
-          {errors.developerEmail && <p className="text-sm text-destructive">{errors.developerEmail.message}</p>}
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="developerPhone">Developer phone</Label>
-          <Input id="developerPhone" {...register("developerPhone")} />
+      <section className="flex flex-col gap-4">
+        <h3 className="text-sm font-medium text-muted-foreground">Developer Liaison Contact</h3>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="developerContactName">Name</Label>
+            <Input id="developerContactName" {...register("developerContactName")} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="developerEmail">Email</Label>
+            <Input id="developerEmail" type="email" {...register("developerEmail")} />
+            {errors.developerEmail && <p className="text-sm text-destructive">{errors.developerEmail.message}</p>}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="developerPhone">Phone</Label>
+            <Input id="developerPhone" {...register("developerPhone")} />
+          </div>
         </div>
       </section>
 

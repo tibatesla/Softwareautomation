@@ -31,6 +31,9 @@ export function SiteHeader() {
           <Link href="/#areas" className="text-sm font-medium text-ink transition-colors hover:text-navy">
             Areas
           </Link>
+          <Link href="/faq" className="text-sm font-medium text-ink transition-colors hover:text-navy">
+            FAQ
+          </Link>
           <Link href="/#contact" className="text-sm font-medium text-ink transition-colors hover:text-navy">
             Contact
           </Link>

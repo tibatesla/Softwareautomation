@@ -46,3 +46,8 @@ export const AD_PLATFORM_COLOR: Record<string, BadgeColor> = {
   google: "warning",
   tiktok: "purple",
 };
+
+export const PAYMENT_PAYER_TYPE_COLOR: Record<string, BadgeColor> = {
+  lead: "success",
+  developer: "purple",
+};

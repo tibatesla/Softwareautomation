@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import type { Payment } from "@/lib/types";
+import type { Payment, PaymentPayerType } from "@/lib/types";
 
 export interface CreatePaymentPayload {
   propertyId: string;
@@ -10,6 +10,7 @@ export interface CreatePaymentPayload {
   paymentMethod?: string;
   paymentDate?: string;
   notes?: string;
+  payerType?: PaymentPayerType;
 }
 
 export interface UpdatePaymentPayload {
@@ -18,6 +19,7 @@ export interface UpdatePaymentPayload {
   paymentMethod?: string;
   paymentDate?: string;
   notes?: string;
+  payerType?: PaymentPayerType;
 }
 
 const paymentsKey = ["payments"] as const;

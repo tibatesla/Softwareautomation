@@ -57,6 +57,14 @@ export function useUpdateProperty(id: string) {
   });
 }
 
+export function useDeleteProperty() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`/properties/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: propertiesKey }),
+  });
+}
+
 export function useUploadPropertyMedia(id: string) {
   const queryClient = useQueryClient();
   return useMutation({

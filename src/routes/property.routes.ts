@@ -8,6 +8,7 @@ import {
   getProperty,
   createProperty,
   updateProperty,
+  deleteProperty,
   uploadPropertyMediaFile,
   deletePropertyMediaFile,
 } from '../controllers/property.controller';
@@ -23,6 +24,7 @@ router.get('/:id', getProperty);
 // Mutations: Owner/Admin only, per MSA Module 7 (property CRUD is an Admin/Owner function).
 router.post('/', requireRole('owner', 'admin'), createProperty);
 router.patch('/:id', requireRole('owner', 'admin'), updateProperty);
+router.delete('/:id', requireRole('owner', 'admin'), deleteProperty);
 
 // Media: same Owner/Admin restriction as other property mutations.
 router.post('/:id/media', requireRole('owner', 'admin'), uploadPropertyMedia, uploadPropertyMediaFile);
