@@ -1,13 +1,17 @@
 "use client";
 
-import { Wallet, TrendingUp, CalendarRange, Calculator, HandCoins } from "lucide-react";
-import { usePayments } from "@/lib/queries/payments";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Wallet, TrendingUp, CalendarRange, Calculator, HandCoins, Trash2 } from "lucide-react";
+import { usePayments, useBulkDeletePayments } from "@/lib/queries/payments";
 import { useProperties } from "@/lib/queries/properties";
 import { useLeads } from "@/lib/queries/leads";
 import { PaymentDialog } from "@/components/payments/payment-dialog";
 import { PaymentEditDialog } from "@/components/payments/payment-edit-dialog";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuthUser } from "@/components/layout/auth-context";
 import { hasRole } from "@/lib/types";
@@ -22,6 +26,43 @@ export default function PaymentsPage() {
   const { data: payments, isLoading, error } = usePayments();
   const { data: properties } = useProperties();
   const { data: leads } = useLeads();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const bulkDelete = useBulkDeletePayments();
+
+  const allSelected = Boolean(payments?.length) && payments!.every((p) => selected.has(p.id));
+
+  const toggleAll = () => {
+    if (!payments) return;
+    setSelected(allSelected ? new Set() : new Set(payments.map((p) => p.id)));
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const count = selected.size;
+    if (!window.confirm(`Delete ${count} payment${count === 1 ? "" : "s"}? This can't be undone.`)) return;
+    try {
+      const result = await bulkDelete.mutateAsync([...selected]);
+      setSelected(new Set());
+      if (result.failed.length === 0) {
+        toast.success(`Deleted ${result.deleted.length} payment${result.deleted.length === 1 ? "" : "s"}`);
+      } else {
+        toast.error(
+          `Deleted ${result.deleted.length}, couldn't delete ${result.failed.length}: ${result.failed
+            .map((f) => f.error)
+            .join(" ")}`,
+        );
+      }
+    } catch {
+      toast.error("Bulk delete failed");
+    }
+  };
 
   const totalAmount = payments?.reduce((sum, p) => sum + Number(p.amount), 0) ?? 0;
   const now = new Date();
@@ -55,11 +96,37 @@ export default function PaymentsPage() {
         </div>
       )}
 
+      {canEdit && selected.size > 0 && (
+        <div className="flex items-center justify-between rounded-lg border bg-muted/50 px-4 py-2">
+          <span className="text-sm font-medium">{selected.size} selected</span>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setSelected(new Set())}>
+              Clear
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleBulkDelete}
+              disabled={bulkDelete.isPending}
+            >
+              <Trash2 className="size-3.5" />
+              Delete selected
+            </Button>
+          </div>
+        </div>
+      )}
+
       {payments && (
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
+                {canEdit && (
+                  <TableHead className="w-10">
+                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all" />
+                  </TableHead>
+                )}
                 <TableHead>Date</TableHead>
                 <TableHead>Payer</TableHead>
                 <TableHead>Property</TableHead>
@@ -76,6 +143,15 @@ export default function PaymentsPage() {
                 const lead = leads?.find((l) => l.id === payment.leadId);
                 return (
                   <TableRow key={payment.id}>
+                    {canEdit && (
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(payment.id)}
+                          onCheckedChange={() => toggleOne(payment.id)}
+                          aria-label={`Select payment from ${new Date(payment.paymentDate).toLocaleDateString()}`}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>{new Date(payment.paymentDate).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <Badge variant={PAYMENT_PAYER_TYPE_COLOR[payment.payerType]}>{PAYER_TYPE_LABEL[payment.payerType]}</Badge>
@@ -95,7 +171,7 @@ export default function PaymentsPage() {
               })}
               {payments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 8 : 7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={canEdit ? 9 : 7} className="text-center text-muted-foreground">
                     No payments recorded yet.
                   </TableCell>
                 </TableRow>

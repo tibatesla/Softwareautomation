@@ -7,9 +7,12 @@ import {
   getLead,
   createLead,
   updateLead,
+  deleteLead,
+  bulkDeleteLeads,
   claimLead,
   listLeadMessages,
   sendLeadMessage,
+  markLeadRead,
 } from '../controllers/lead.controller';
 
 const router = Router();
@@ -27,10 +30,16 @@ router.get('/:id/messages', listLeadMessages);
 // not requireRole, which only checks the role name.
 router.post('/:id/messages', sendLeadMessage);
 
+// Personal read state -- any authenticated role can mark a lead they can
+// see as read; RLS scopes which leads that actually applies to.
+router.post('/:id/read', markLeadRead);
+
 // Manual creation/edits: Owner/Admin only. (Automated intake -- WhatsApp/CAPI
 // -- is a separate future integration, not this authenticated API surface.)
 router.post('/', requireRole('owner', 'admin'), createLead);
 router.patch('/:id', requireRole('owner', 'admin'), updateLead);
+router.delete('/:id', requireRole('owner', 'admin'), deleteLead);
+router.post('/bulk-delete', requireRole('owner', 'admin'), bulkDeleteLeads);
 
 // Speed-to-lead claim: Agent only.
 router.post('/:id/claim', requireRole('agent'), claimLead);

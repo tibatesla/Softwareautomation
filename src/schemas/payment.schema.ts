@@ -38,5 +38,9 @@ export const updatePaymentSchema = z.object({
   payerType: z.enum(paymentPayerTypeValues).optional(),
 });
 
+export const bulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1),
+});
+
 export type CreatePaymentPayload = z.infer<typeof createPaymentSchema>;
 export type UpdatePaymentPayload = z.infer<typeof updatePaymentSchema>;

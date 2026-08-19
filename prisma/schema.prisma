@@ -22,6 +22,7 @@ model User {
   lastLeadAssignedAt DateTime?      @map("last_lead_assigned_at") @db.Timestamptz(6)
   agentPenalties     AgentPenalty[]
   bookings           Booking[]
+  leadReads          LeadRead[]
   leads              Lead[]
   payments           Payment[]
   assignedProperties Property[]     @relation("PropertyAssignedAgent")
@@ -102,9 +103,11 @@ model Lead {
   ctwaClid            String?                 @map("ctwa_clid")
   adSourceId          String?                 @map("ad_source_id")
   adSourcePlatform    AdPlatform?             @map("ad_source_platform")
+  lastMessageAt       DateTime?               @map("last_message_at") @db.Timestamptz(6)
   agentPenalties      AgentPenalty[]
   bookings            Booking[]
   messages            LeadMessage[]
+  reads               LeadRead[]
   claimedByAgent      User?                   @relation(fields: [claimedByAgentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   property            Property?               @relation(fields: [propertyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   payments            Payment[]
@@ -114,7 +117,22 @@ model Lead {
   @@index([targetSegment, qualificationStatus], map: "idx_leads_segment_status")
   @@index([createdAt], map: "idx_leads_unclaimed_qualified", where: raw("((qualification_status = 'qualified'::lead_qualification_status) AND (claimed_by_agent_id IS NULL))"))
   @@index([dealStage], map: "idx_leads_deal_stage")
+  @@index([lastMessageAt(sort: Desc)], map: "idx_leads_last_message_at")
   @@map("leads")
+}
+
+/// Per-(user, lead) read marker -- deliberately not advanced by the
+/// WhatsApp bot's automated replies, only by a human opening the
+/// conversation. See migration 030 for the full rationale.
+model LeadRead {
+  userId     String   @map("user_id") @db.Uuid
+  leadId     String   @map("lead_id") @db.Uuid
+  lastReadAt DateTime @default(now()) @map("last_read_at") @db.Timestamptz(6)
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user       User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([userId, leadId])
+  @@map("lead_reads")
 }
 
 model Payment {

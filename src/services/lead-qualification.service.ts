@@ -135,7 +135,7 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
       });
     }
 
-    await tx.leadMessage.create({
+    const inboundMessage = await tx.leadMessage.create({
       data: {
         leadId: lead.id,
         direction: 'inbound',
@@ -143,6 +143,7 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
         whatsappMessageId: message.whatsappMessageId,
       },
     });
+    await tx.lead.update({ where: { id: lead.id }, data: { lastMessageAt: inboundMessage.createdAt } });
 
     // First-ever message just triggers lead creation + the opening
     // question; it isn't itself an answer to anything the bot has asked.
@@ -238,11 +239,16 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
       await sendWhatsAppText(rawWaId, replyText);
       // Only recorded once the send actually succeeded -- the transcript
       // should reflect what was really delivered, not what was attempted.
-      await withSystemContext((tx) =>
-        tx.leadMessage.create({
+      // lastMessageAt (sort order) is updated same as any message, but --
+      // deliberately -- no lead_reads row is touched here: a bot reply is
+      // not a human reviewing the conversation, so it must never clear the
+      // unread state (see migration 030).
+      await withSystemContext(async (tx) => {
+        const botMessage = await tx.leadMessage.create({
           data: { leadId: outcome.leadId, direction: 'outbound', senderType: 'bot', body: replyText },
-        }),
-      );
+        });
+        await tx.lead.update({ where: { id: outcome.leadId }, data: { lastMessageAt: botMessage.createdAt } });
+      });
     } catch (error) {
       // Lead data is already safely committed above; a failed reply just
       // means the lead sits waiting for its next inbound message instead

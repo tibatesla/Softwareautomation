@@ -1,8 +1,8 @@
 // src/controllers/payment.controller.ts
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { withRLSContext } from '../config/database';
-import { createPaymentSchema, updatePaymentSchema } from '../schemas/payment.schema';
+import { withRLSContext, AppRole } from '../config/database';
+import { createPaymentSchema, updatePaymentSchema, bulkDeleteSchema } from '../schemas/payment.schema';
 
 export const listPayments = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id, role } = req.user!;
@@ -27,10 +27,10 @@ export const getPayment = async (req: AuthenticatedRequest, res: Response): Prom
 };
 
 /**
- * Payments are an append-only record-keeping ledger (no payment gateway,
- * no funds move through this app) -- there is no delete endpoint, and
- * updates (see updatePayment below) are Owner-only, for correcting typos
- * rather than general editing. recordedBy is always the authenticated
+ * Payments are a record-keeping ledger (no payment gateway, no funds move
+ * through this app). Updates and deletes (see below) are both Owner-only --
+ * updates for correcting typos rather than general editing, deletes for
+ * removing a record entirely. recordedBy is always the authenticated
  * caller, never client-supplied, so the audit trail can't be forged.
  */
 export const createPayment = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -74,4 +74,52 @@ export const updatePayment = async (req: AuthenticatedRequest, res: Response): P
   } catch {
     res.status(404).json({ error: 'Payment not found' });
   }
+};
+
+/**
+ * Owner-only (route + payments_owner_delete RLS policy both enforce this),
+ * same access shape as updatePayment. Nothing else references a payment
+ * as a foreign key, so unlike deleteProperty/deleteLead there's no
+ * linked-record check needed -- a payment is always a leaf row.
+ */
+const deletePaymentCore = async (userId: string, role: AppRole, paymentId: string): Promise<boolean> => {
+  try {
+    await withRLSContext(userId, role, (tx) => tx.payment.delete({ where: { id: paymentId } }));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const deletePayment = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id, role } = req.user!;
+  const ok = await deletePaymentCore(id, role, req.params.id);
+  if (!ok) {
+    res.status(404).json({ error: 'Payment not found' });
+    return;
+  }
+  res.status(204).send();
+};
+
+export const bulkDeletePayments = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const parseResult = bulkDeleteSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Malformed request', details: parseResult.error.errors });
+    return;
+  }
+
+  const { id, role } = req.user!;
+  const results = await Promise.all(
+    parseResult.data.ids.map(async (paymentId) => {
+      const ok = await deletePaymentCore(id, role, paymentId);
+      return ok
+        ? { id: paymentId, deleted: true as const }
+        : { id: paymentId, deleted: false as const, error: 'Payment not found' };
+    }),
+  );
+
+  res.status(200).json({
+    deleted: results.filter((r) => r.deleted).map((r) => r.id),
+    failed: results.filter((r): r is { id: string; deleted: false; error: string } => !r.deleted),
+  });
 };

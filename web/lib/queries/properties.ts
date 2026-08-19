@@ -65,6 +65,20 @@ export function useDeleteProperty() {
   });
 }
 
+export interface BulkDeleteResult {
+  deleted: string[];
+  failed: { id: string; error: string }[];
+}
+
+export function useBulkDeleteProperties() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiFetch<BulkDeleteResult>("/properties/bulk-delete", { method: "POST", body: JSON.stringify({ ids }) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: propertiesKey }),
+  });
+}
+
 export function useUploadPropertyMedia(id: string) {
   const queryClient = useQueryClient();
   return useMutation({

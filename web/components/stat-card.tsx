@@ -36,9 +36,11 @@ export function StatCard({
   className?: string;
 }) {
   // Large formatted currency values (e.g. "KES 65,000,000") are long enough
-  // that a fixed text-2xl silently ellipsis-clips digits -- shrink the font
-  // instead of just truncating, so the full number stays readable. `title`
-  // is a fallback if it's still cut off on a very narrow viewport.
+  // that a fixed text-2xl clips digits -- shrink the font for long values,
+  // and let the value wrap onto a second line rather than truncate it. A
+  // wrapped number is still fully readable; an ellipsis-clipped one is
+  // just wrong (there's no way to tell what the missing digits were), so
+  // unlike the label below, the value is never allowed to truncate.
   const valueText = typeof value === "string" || typeof value === "number" ? String(value) : undefined;
   const isLongValue = (valueText?.length ?? 0) > 10;
 
@@ -57,7 +59,7 @@ export function StatCard({
           <span className="truncate text-xs font-medium text-muted-foreground">{label}</span>
           <span
             className={cn(
-              "truncate font-semibold tabular-nums",
+              "wrap-break-word font-semibold leading-tight tabular-nums",
               isLongValue ? "text-base sm:text-lg" : "text-lg sm:text-2xl",
             )}
             title={valueText}

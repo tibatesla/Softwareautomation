@@ -50,3 +50,19 @@ export function useUpdatePayment(id: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: paymentsKey }),
   });
 }
+
+export interface BulkDeleteResult {
+  deleted: string[];
+  failed: { id: string; error: string }[];
+}
+
+// Owner-only -- the backend 403s this for admin/agent (see
+// payments_owner_delete RLS policy + payment.routes.ts).
+export function useBulkDeletePayments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiFetch<BulkDeleteResult>("/payments/bulk-delete", { method: "POST", body: JSON.stringify({ ids }) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: paymentsKey }),
+  });
+}

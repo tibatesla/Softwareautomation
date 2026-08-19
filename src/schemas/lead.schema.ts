@@ -55,6 +55,10 @@ export const sendLeadMessageSchema = z.object({
   body: z.string().min(1).max(4096),
 });
 
+export const bulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1),
+});
+
 export type CreateLeadPayload = z.infer<typeof createLeadSchema>;
 export type UpdateLeadPayload = z.infer<typeof updateLeadSchema>;
 export type SendLeadMessagePayload = z.infer<typeof sendLeadMessageSchema>;

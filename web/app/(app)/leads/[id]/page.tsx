@@ -1,9 +1,9 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { useClaimLead, useLead, useLeadMessages, useSendLeadMessage } from "@/lib/queries/leads";
+import { useClaimLead, useLead, useLeadMessages, useMarkLeadRead, useSendLeadMessage } from "@/lib/queries/leads";
 import { useProperties } from "@/lib/queries/properties";
 import { useAuthUser } from "@/components/layout/auth-context";
 import { hasRole } from "@/lib/types";
@@ -31,7 +31,15 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const { data: messages } = useLeadMessages(id);
   const claimLead = useClaimLead();
   const sendMessage = useSendLeadMessage(id);
+  const markRead = useMarkLeadRead();
   const [reply, setReply] = useState("");
+
+  // Opening the conversation is what "read" means here -- deliberately
+  // not tied to anything the bot does (see useMarkLeadRead).
+  useEffect(() => {
+    markRead.mutate(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (isLoading) return <p className="text-muted-foreground">Loading lead...</p>;
   if (error || !lead) return <p className="text-destructive">Lead not found.</p>;

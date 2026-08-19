@@ -16,13 +16,19 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { UserMenu } from "@/components/layout/user-menu";
+import { Badge } from "@/components/ui/badge";
 import { hasRole, type AuthUser } from "@/lib/types";
 import { NAV_ITEMS } from "@/lib/nav-items";
 import { cn } from "@/lib/utils";
+import { useLeadNotifications } from "@/hooks/use-lead-notifications";
 
 export function AppSidebar({ user }: { user: AuthUser }) {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
+  // Mounted here (not the leads page) so unread notifications fire and the
+  // badge stays current no matter which page is open -- see the hook for
+  // why bot activity never counts toward "unread".
+  const { totalUnread } = useLeadNotifications();
   // Icon components can't cross the server->client prop boundary, so
   // NAV_ITEMS (which holds Lucide component references) is imported and
   // role-filtered here on the client, rather than passed down from the
@@ -57,6 +63,11 @@ export function AppSidebar({ user }: { user: AuthUser }) {
                     >
                       <Icon className={cn("size-4", !isActive && item.iconClassName)} />
                       {item.label}
+                      {item.href === "/leads" && totalUnread > 0 && (
+                        <Badge variant="destructive" className="ml-auto">
+                          {totalUnread}
+                        </Badge>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );

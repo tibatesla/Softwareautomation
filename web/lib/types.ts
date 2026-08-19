@@ -131,6 +131,10 @@ export interface Lead {
   dealStage: DealStage;
   propertyInterestRaw: string | null;
   ctwaClid: string | null;
+  lastMessageAt: string | null;
+  // Not a DB column -- computed per-request in listLeads, scoped to the
+  // calling user's own read state (see lead_reads / migration 030).
+  unreadCount: number;
 }
 
 export type MessageDirection = "inbound" | "outbound";

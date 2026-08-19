@@ -3,12 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, CheckCircle2, Clock, Ban } from "lucide-react";
-import { useProperties } from "@/lib/queries/properties";
+import { toast } from "sonner";
+import { Building2, CheckCircle2, Clock, Ban, Trash2 } from "lucide-react";
+import { useBulkDeleteProperties, useProperties } from "@/lib/queries/properties";
 import { useAuthUser } from "@/components/layout/auth-context";
 import { hasRole } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { StatCard } from "@/components/stat-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PROPERTY_STATUS_COLOR } from "@/lib/status-colors";
@@ -21,6 +23,8 @@ export default function PropertiesPage() {
   const { data: properties, isLoading, error } = useProperties();
   const canManage = hasRole(user, ["owner", "admin"]);
   const [areaFilter, setAreaFilter] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const bulkDelete = useBulkDeleteProperties();
 
   const areaCounts = PROPERTY_AREA_VALUES.map((area) => ({
     area,
@@ -30,6 +34,41 @@ export default function PropertiesPage() {
   const otherCount = properties?.filter((p) => !p.location || !(PROPERTY_AREA_VALUES as readonly string[]).includes(p.location)).length ?? 0;
 
   const visibleProperties = areaFilter ? properties?.filter((p) => (areaFilter === "Other" ? !p.location || !(PROPERTY_AREA_VALUES as readonly string[]).includes(p.location) : p.location === areaFilter)) : properties;
+
+  const allVisibleSelected = Boolean(visibleProperties?.length) && visibleProperties!.every((p) => selected.has(p.id));
+
+  const toggleAll = () => {
+    if (!visibleProperties) return;
+    setSelected(allVisibleSelected ? new Set() : new Set(visibleProperties.map((p) => p.id)));
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const count = selected.size;
+    if (!window.confirm(`Delete ${count} propert${count === 1 ? "y" : "ies"}? This can't be undone.`)) return;
+    try {
+      const result = await bulkDelete.mutateAsync([...selected]);
+      setSelected(new Set());
+      if (result.failed.length === 0) {
+        toast.success(`Deleted ${result.deleted.length} propert${result.deleted.length === 1 ? "y" : "ies"}`);
+      } else {
+        toast.error(
+          `Deleted ${result.deleted.length}, couldn't delete ${result.failed.length}: ${result.failed
+            .map((f) => f.error)
+            .join(" ")}`,
+        );
+      }
+    } catch {
+      toast.error("Bulk delete failed");
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -110,11 +149,37 @@ export default function PropertiesPage() {
         </div>
       )}
 
+      {canManage && selected.size > 0 && (
+        <div className="flex items-center justify-between rounded-lg border bg-muted/50 px-4 py-2">
+          <span className="text-sm font-medium">{selected.size} selected</span>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setSelected(new Set())}>
+              Clear
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleBulkDelete}
+              disabled={bulkDelete.isPending}
+            >
+              <Trash2 className="size-3.5" />
+              Delete selected
+            </Button>
+          </div>
+        </div>
+      )}
+
       {visibleProperties && (
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
+                {canManage && (
+                  <TableHead className="w-10">
+                    <Checkbox checked={allVisibleSelected} onCheckedChange={toggleAll} aria-label="Select all" />
+                  </TableHead>
+                )}
                 <TableHead>Title</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Price</TableHead>
@@ -128,6 +193,15 @@ export default function PropertiesPage() {
                   onClick={() => router.push(`/properties/${property.id}`)}
                   className="cursor-pointer"
                 >
+                  {canManage && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selected.has(property.id)}
+                        onCheckedChange={() => toggleOne(property.id)}
+                        aria-label={`Select ${property.title}`}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="font-medium">{property.title}</TableCell>
                   <TableCell>{property.location ?? "—"}</TableCell>
                   <TableCell>{formatCurrency(property.price, property.currency)}</TableCell>
@@ -138,7 +212,7 @@ export default function PropertiesPage() {
               ))}
               {visibleProperties.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={canManage ? 5 : 4} className="text-center text-muted-foreground">
                     {areaFilter ? "No properties in this area." : "No properties yet."}
                   </TableCell>
                 </TableRow>

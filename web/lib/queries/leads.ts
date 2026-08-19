@@ -9,10 +9,19 @@ export type LeadPayload = Partial<Omit<Lead, "id" | "createdAt" | "updatedAt" | 
 const leadsKey = ["leads"] as const;
 const leadKey = (id: string) => ["leads", id] as const;
 
+// Polled (not fetch-once) so new inbound WhatsApp messages -- and the
+// unread counts/notifications derived from them -- show up without a
+// manual refresh. Keeps polling in background tabs too, since the whole
+// point of a "new message" notification is surfacing it even when the
+// CRM tab isn't focused.
+const LEADS_POLL_INTERVAL_MS = 20_000;
+
 export function useLeads() {
   return useQuery({
     queryKey: leadsKey,
     queryFn: () => apiFetch<Lead[]>("/leads"),
+    refetchInterval: LEADS_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -58,6 +67,31 @@ export function useSendLeadMessage(id: string) {
     mutationFn: (body: string) =>
       apiFetch<LeadMessage>(`/leads/${id}/messages`, { method: "POST", body: JSON.stringify({ body }) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["leads", id, "messages"] }),
+  });
+}
+
+export interface BulkDeleteResult {
+  deleted: string[];
+  failed: { id: string; error: string }[];
+}
+
+export function useBulkDeleteLeads() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiFetch<BulkDeleteResult>("/leads/bulk-delete", { method: "POST", body: JSON.stringify({ ids }) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: leadsKey }),
+  });
+}
+
+// Marks the lead's conversation as read by the caller -- called when a
+// human actually opens the message thread, never automatically by
+// anything the bot does (see markLeadRead in lead.controller.ts).
+export function useMarkLeadRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`/leads/${id}/read`, { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: leadsKey }),
   });
 }
 

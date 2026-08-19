@@ -1,16 +1,70 @@
 // src/controllers/lead.controller.ts
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { withRLSContext } from '../config/database';
-import { createLeadSchema, updateLeadSchema, sendLeadMessageSchema } from '../schemas/lead.schema';
+import { withRLSContext, AppRole } from '../config/database';
+import { createLeadSchema, updateLeadSchema, sendLeadMessageSchema, bulkDeleteSchema } from '../schemas/lead.schema';
 import { sendWhatsAppText, WhatsAppSendError, WHATSAPP_REENGAGEMENT_WINDOW_CLOSED_CODE } from '../services/whatsapp-cloud-api.service';
+
+interface UnreadRow {
+  lead_id: string;
+  unread_count: number;
+}
 
 export const listLeads = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id, role } = req.user!;
-  const leads = await withRLSContext(id, role, (tx) =>
-    tx.lead.findMany({ orderBy: { createdAt: 'desc' } }),
+  const [leads, unreadRows] = await withRLSContext(id, role, (tx) =>
+    Promise.all([
+      tx.lead.findMany({ orderBy: { createdAt: 'desc' } }),
+      // Unread = inbound messages (from the lead) newer than this caller's
+      // own read marker for that lead -- deliberately per-user, and never
+      // advanced by the bot's automated outbound replies (see migration
+      // 030). Raw SQL because Postgres FILTER-aggregate is the clean way
+      // to express "count inbound messages newer than a per-lead cutoff"
+      // in one pass instead of N+1 queries.
+      tx.$queryRaw<UnreadRow[]>`
+        SELECT l.id AS lead_id,
+               COUNT(lm.id) FILTER (
+                 WHERE lm.direction = 'inbound'
+                   AND lm.created_at > COALESCE(lr.last_read_at, '-infinity'::timestamptz)
+               )::int AS unread_count
+        FROM leads l
+        LEFT JOIN lead_messages lm ON lm.lead_id = l.id
+        LEFT JOIN lead_reads lr ON lr.lead_id = l.id AND lr.user_id = ${id}::uuid
+        GROUP BY l.id
+      `,
+    ]),
   );
-  res.status(200).json(leads);
+
+  const unreadByLead = new Map(unreadRows.map((r) => [r.lead_id, r.unread_count]));
+  const leadsWithUnread = leads.map((lead) => ({ ...lead, unreadCount: unreadByLead.get(lead.id) ?? 0 }));
+
+  res.status(200).json(leadsWithUnread);
+};
+
+/**
+ * Marks a lead's conversation as read by the caller (upserts their own
+ * lead_reads row to now()). Called when a human opens the lead's message
+ * thread -- not automatically by anything the bot does.
+ */
+export const markLeadRead = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id, role } = req.user!;
+  const leadId = req.params.id;
+
+  const lead = await withRLSContext(id, role, (tx) => tx.lead.findUnique({ where: { id: leadId }, select: { id: true } }));
+  if (!lead) {
+    res.status(404).json({ error: 'Lead not found' });
+    return;
+  }
+
+  await withRLSContext(id, role, (tx) =>
+    tx.leadRead.upsert({
+      where: { userId_leadId: { userId: id, leadId } },
+      create: { userId: id, leadId },
+      update: { lastReadAt: new Date() },
+    }),
+  );
+
+  res.status(204).send();
 };
 
 export const getLead = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -84,9 +138,20 @@ export const sendLeadMessage = async (req: AuthenticatedRequest, res: Response):
   }
 
   try {
-    const message = await withRLSContext(id, role, (tx) =>
-      tx.leadMessage.create({ data: { leadId: lead.id, direction: 'outbound', senderType: 'human', body: parseResult.data.body } }),
-    );
+    const message = await withRLSContext(id, role, async (tx) => {
+      const created = await tx.leadMessage.create({
+        data: { leadId: lead.id, direction: 'outbound', senderType: 'human', body: parseResult.data.body },
+      });
+      await tx.lead.update({ where: { id: lead.id }, data: { lastMessageAt: created.createdAt } });
+      // Sending a reply means the sender has, by definition, seen the
+      // conversation up to this point -- advance their own read marker too.
+      await tx.leadRead.upsert({
+        where: { userId_leadId: { userId: id, leadId: lead.id } },
+        create: { userId: id, leadId: lead.id, lastReadAt: created.createdAt },
+        update: { lastReadAt: created.createdAt },
+      });
+      return created;
+    });
     res.status(201).json(message);
   } catch (error) {
     // Sent successfully but failed to persist -- don't report this as a
@@ -127,6 +192,83 @@ export const updateLead = async (req: AuthenticatedRequest, res: Response): Prom
   } catch {
     res.status(404).json({ error: 'Lead not found' });
   }
+};
+
+type DeleteLeadResult = { ok: true } | { ok: false; status: 404 | 409; error: string };
+
+/**
+ * Shared by the single-item and bulk delete endpoints. Blocked if the lead
+ * has real bookings or payments -- those are business records that must be
+ * preserved. A lead's own WhatsApp conversation history isn't a separate
+ * record another party owns, so it's deleted alongside the lead rather
+ * than blocking; agent penalty rows referencing the lead keep their own
+ * accountability history but have lead_id cleared instead of being
+ * deleted or blocking the delete.
+ */
+const deleteLeadCore = async (userId: string, role: AppRole, leadId: string): Promise<DeleteLeadResult> => {
+  try {
+    const linked = await withRLSContext(userId, role, (tx) =>
+      tx.lead.findUnique({
+        where: { id: leadId },
+        select: { _count: { select: { bookings: true, payments: true } } },
+      }),
+    );
+
+    if (!linked) {
+      return { ok: false, status: 404, error: 'Lead not found' };
+    }
+
+    const linkedCounts = Object.entries(linked._count).filter(([, count]) => count > 0);
+    if (linkedCounts.length > 0) {
+      const summary = linkedCounts.map(([name, count]) => `${count} ${name}`).join(', ');
+      return {
+        ok: false,
+        status: 409,
+        error: `Can't delete -- this lead has linked records (${summary}). Mark it as lost/unqualified instead to preserve that history.`,
+      };
+    }
+
+    await withRLSContext(userId, role, async (tx) => {
+      await tx.leadMessage.deleteMany({ where: { leadId } });
+      await tx.agentPenalty.updateMany({ where: { leadId }, data: { leadId: null } });
+      await tx.lead.delete({ where: { id: leadId } });
+    });
+
+    return { ok: true };
+  } catch {
+    return { ok: false, status: 404, error: 'Lead not found' };
+  }
+};
+
+export const deleteLead = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id, role } = req.user!;
+  const result = await deleteLeadCore(id, role, req.params.id);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.status(204).send();
+};
+
+export const bulkDeleteLeads = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const parseResult = bulkDeleteSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Malformed request', details: parseResult.error.errors });
+    return;
+  }
+
+  const { id, role } = req.user!;
+  const results = await Promise.all(
+    parseResult.data.ids.map(async (leadId) => {
+      const result = await deleteLeadCore(id, role, leadId);
+      return result.ok ? { id: leadId, deleted: true as const } : { id: leadId, deleted: false as const, error: result.error };
+    }),
+  );
+
+  res.status(200).json({
+    deleted: results.filter((r) => r.deleted).map((r) => r.id),
+    failed: results.filter((r): r is { id: string; deleted: false; error: string } => !r.deleted),
+  });
 };
 
 /**

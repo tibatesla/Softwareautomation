@@ -1,9 +1,9 @@
 // src/controllers/property.controller.ts
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { withRLSContext } from '../config/database';
+import { withRLSContext, AppRole } from '../config/database';
 import { Prisma } from '../../generated/prisma';
-import { createPropertySchema, updatePropertySchema } from '../schemas/property.schema';
+import { createPropertySchema, updatePropertySchema, bulkDeleteSchema } from '../schemas/property.schema';
 import { uploadMediaBuffer, deletePropertyMedia, publicIdFromUrl } from '../services/cloudinary.service';
 import { resourceTypeForMimetype } from '../middlewares/upload.middleware';
 
@@ -57,12 +57,18 @@ export const createProperty = async (req: AuthenticatedRequest, res: Response): 
  * regardless; checking first lets us return a clear, itemized 409 instead
  * of a raw constraint-violation error.
  */
-export const deleteProperty = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const { id, role } = req.user!;
-  const propertyId = req.params.id;
+type DeletePropertyResult = { ok: true } | { ok: false; status: 404 | 409; error: string };
 
+/**
+ * Shared by the single-item and bulk delete endpoints. Blocked if any
+ * leads/bookings/payments still reference the property -- those all have
+ * NoAction (restrict) foreign keys, so the DELETE would fail regardless;
+ * checking first lets us return a clear, itemized reason instead of a raw
+ * constraint-violation error.
+ */
+const deletePropertyCore = async (userId: string, role: AppRole, propertyId: string): Promise<DeletePropertyResult> => {
   try {
-    const linked = await withRLSContext(id, role, (tx) =>
+    const linked = await withRLSContext(userId, role, (tx) =>
       tx.property.findUnique({
         where: { id: propertyId },
         select: {
@@ -74,20 +80,20 @@ export const deleteProperty = async (req: AuthenticatedRequest, res: Response): 
     );
 
     if (!linked) {
-      res.status(404).json({ error: 'Property not found' });
-      return;
+      return { ok: false, status: 404, error: 'Property not found' };
     }
 
     const linkedCounts = Object.entries(linked._count).filter(([, count]) => count > 0);
     if (linkedCounts.length > 0) {
       const summary = linkedCounts.map(([name, count]) => `${count} ${name}`).join(', ');
-      res.status(409).json({
+      return {
+        ok: false,
+        status: 409,
         error: `Can't delete -- this property has linked records (${summary}). Mark it as sold/unavailable instead to preserve that history.`,
-      });
-      return;
+      };
     }
 
-    await withRLSContext(id, role, (tx) => tx.property.delete({ where: { id: propertyId } }));
+    await withRLSContext(userId, role, (tx) => tx.property.delete({ where: { id: propertyId } }));
 
     for (const url of [...linked.images, ...linked.videos]) {
       const publicId = publicIdFromUrl(url);
@@ -98,10 +104,41 @@ export const deleteProperty = async (req: AuthenticatedRequest, res: Response): 
       );
     }
 
-    res.status(204).send();
+    return { ok: true };
   } catch {
-    res.status(404).json({ error: 'Property not found' });
+    return { ok: false, status: 404, error: 'Property not found' };
   }
+};
+
+export const deleteProperty = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id, role } = req.user!;
+  const result = await deletePropertyCore(id, role, req.params.id);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.status(204).send();
+};
+
+export const bulkDeleteProperties = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const parseResult = bulkDeleteSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Malformed request', details: parseResult.error.errors });
+    return;
+  }
+
+  const { id, role } = req.user!;
+  const results = await Promise.all(
+    parseResult.data.ids.map(async (propertyId) => {
+      const result = await deletePropertyCore(id, role, propertyId);
+      return result.ok ? { id: propertyId, deleted: true as const } : { id: propertyId, deleted: false as const, error: result.error };
+    }),
+  );
+
+  res.status(200).json({
+    deleted: results.filter((r) => r.deleted).map((r) => r.id),
+    failed: results.filter((r): r is { id: string; deleted: false; error: string } => !r.deleted),
+  });
 };
 
 export const updateProperty = async (req: AuthenticatedRequest, res: Response): Promise<void> => {

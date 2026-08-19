@@ -95,5 +95,9 @@ export const createPropertySchema = z.object({
 
 export const updatePropertySchema = createPropertySchema.partial();
 
+export const bulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1),
+});
+
 export type CreatePropertyPayload = z.infer<typeof createPropertySchema>;
 export type UpdatePropertyPayload = z.infer<typeof updatePropertySchema>;
