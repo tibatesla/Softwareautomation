@@ -14,8 +14,19 @@ const metaWhatsAppMessageSchema = z
     from: z.string().min(1), // sender's wa_id, digits only, no leading '+'
     id: z.string().optional(),
     timestamp: z.union([z.string(), z.number()]).optional(),
-    type: z.string().optional(), // 'text', 'image', etc.
+    type: z.string().optional(), // 'text', 'image', 'interactive', etc.
     text: z.object({ body: z.string() }).optional(),
+    // Present when the contact tapped a button/list row from an
+    // interactive message we sent (see sendWhatsAppSlotList) -- Meta
+    // echoes back whatever opaque id we set on that row/button verbatim.
+    interactive: z
+      .object({
+        type: z.string().optional(), // 'list_reply' | 'button_reply'
+        list_reply: z.object({ id: z.string(), title: z.string().optional() }).passthrough().optional(),
+        button_reply: z.object({ id: z.string(), title: z.string().optional() }).passthrough().optional(),
+      })
+      .passthrough()
+      .optional(),
     // Click-to-WhatsApp ad attribution. Present on the first inbound
     // message of a conversation that started from a CTWA ad -- Meta is
     // the authoritative source for this field (unlike the previous Wati
@@ -100,6 +111,8 @@ export interface NormalizedInboundMessage {
   // aren't guaranteed distinct from each other or from Meta's.
   adSourcePlatform?: 'meta' | 'google' | 'tiktok';
   whatsappMessageId?: string;
+  /** The tapped row/button's opaque id, when this message is an interactive reply (see sendWhatsAppSlotList). */
+  interactiveReplyId?: string;
 }
 
 // Google and TikTok ads that click straight to WhatsApp have no
@@ -157,7 +170,13 @@ export const extractInboundMessages = (payload: MetaWhatsAppWebhookPayload): Nor
       );
 
       for (const message of messages) {
-        const rawText = message.text?.body ?? '';
+        // An interactive reply (tapped list row/button) has no text.body at
+        // all -- fall back to the row's own title so it still reads as
+        // sensible transcript content, and surface the row's opaque id
+        // separately for callers that need the exact machine value (e.g.
+        // the slot's ISO datetime), not just the human-readable title.
+        const interactiveReply = message.interactive?.list_reply ?? message.interactive?.button_reply;
+        const rawText = message.text?.body ?? interactiveReply?.title ?? '';
         // Meta's native referral (ad clicked directly on Meta) takes
         // priority when present; otherwise fall back to a parsed
         // reference code for Google/TikTok ads that click straight to
@@ -175,6 +194,7 @@ export const extractInboundMessages = (payload: MetaWhatsAppWebhookPayload): Nor
           adSourceId: metaAdSourceId ?? parsedRef?.adSourceId,
           adSourcePlatform: metaAdSourceId ? 'meta' : parsedRef?.adSourcePlatform,
           whatsappMessageId: message.id,
+          interactiveReplyId: interactiveReply?.id,
         });
       }
     }

@@ -1,8 +1,9 @@
 // src/controllers/booking.controller.ts
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { withRLSContext, AppRole } from '../config/database';
+import { withRLSContext, withSystemContext, AppRole } from '../config/database';
 import { createBookingSchema, updateBookingSchema, bulkDeleteSchema } from '../schemas/booking.schema';
+import { sendWhatsAppText } from '../services/whatsapp-cloud-api.service';
 
 export const listBookings = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id, role } = req.user!;
@@ -39,7 +40,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
   const agentId = role === 'agent' ? id : parseResult.data.agentId || id;
 
   try {
-    const booking = await withRLSContext(id, role, async (tx) => {
+    const { booking, notify } = await withRLSContext(id, role, async (tx) => {
       const created = await tx.booking.create({
         data: {
           propertyId: parseResult.data.propertyId,
@@ -55,16 +56,57 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
       // advances a lead into "Physical Site Visit Scheduled" -- only from
       // the initial stage, so this never regresses a deal that's already
       // further along (e.g. a follow-up visit after an offer was signed).
+      let notify: { leadId: string; phoneNumber: string; leadName: string | null; propertyTitle: string } | null = null;
       if (parseResult.data.leadId) {
         await tx.lead.updateMany({
           where: { id: parseResult.data.leadId, dealStage: 'new' },
           data: { dealStage: 'site_visit_scheduled' },
         });
+
+        const [lead, property] = await Promise.all([
+          tx.lead.findUnique({ where: { id: parseResult.data.leadId }, select: { phoneNumber: true, fullName: true } }),
+          tx.property.findUnique({ where: { id: created.propertyId }, select: { title: true } }),
+        ]);
+        if (lead) {
+          notify = { leadId: parseResult.data.leadId, phoneNumber: lead.phoneNumber, leadName: lead.fullName, propertyTitle: property?.title ?? 'the property' };
+        }
       }
 
-      return created;
+      return { booking: created, notify };
     });
+
     res.status(201).json(booking);
+
+    // Best-effort, after the response is already sent: a booking an agent
+    // just made in the CRM should reach the lead on WhatsApp the same way
+    // a bot self-booked one does, so the client isn't left wondering
+    // whether it actually went through. Never lets a WhatsApp failure turn
+    // a successfully-created booking into an error response.
+    if (notify) {
+      try {
+        const whenLabel = booking.scheduledAt.toLocaleString('en-KE', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: 'Africa/Nairobi',
+        });
+        const greeting = notify.leadName ? `Hi ${notify.leadName}` : 'Hi';
+        const messageText = `${greeting}, your visit to ${notify.propertyTitle} has been booked for ${whenLabel}. We look forward to seeing you then! If anything changes, just let us know here.`;
+        const waId = notify.phoneNumber.replace(/^\+/, '');
+
+        await sendWhatsAppText(waId, messageText);
+        await withSystemContext(async (tx) => {
+          const message = await tx.leadMessage.create({
+            data: { leadId: notify!.leadId, direction: 'outbound', senderType: 'bot', body: messageText },
+          });
+          await tx.lead.update({ where: { id: notify!.leadId }, data: { lastMessageAt: message.createdAt } });
+        });
+      } catch (error) {
+        console.error('[Booking] Confirmation WhatsApp message failed to send:', error);
+      }
+    }
   } catch {
     res.status(400).json({ error: 'Unable to create booking -- check propertyId/leadId/agentId reference valid records' });
   }

@@ -26,7 +26,7 @@ import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { withSystemContext } from '../config/database';
 import { Prisma } from '../../generated/prisma';
 import { LeadTrackingService } from './tracking.service';
-import { sendWhatsAppText } from './whatsapp-cloud-api.service';
+import { sendWhatsAppText, sendWhatsAppSlotList, WhatsAppSlotOption } from './whatsapp-cloud-api.service';
 import { generateBotReply } from './lead-ai-assistant.service';
 import {
   classifyVisitPreference,
@@ -49,17 +49,21 @@ const QUESTION_IN_PERSON_DETAILS =
 const QUESTION_VIRTUAL_DETAILS =
   'We completely understand that securing a property from afar requires a lot of trust. We will set up a detailed virtual walkthrough for you. To help us prepare, are you hoping to find the right property in the next 30-60 days, and do you have a trusted representative here to view it alongside you?';
 
-// Sent once qualification completes AND the opening message matched a real
-// listing -- invites the client to book a visit right in the chat instead
-// of the external calendar link the original script called for, since the
-// point of this revision is a booking that lands directly in the platform.
+// Sent as the body of the tappable slot-list message, once qualification
+// completes AND the opening message matched a real listing with at least
+// one open slot -- lets the client pick an exact time instead of typing
+// one freehand, fully native (no external calendar link, no WhatsApp Flows
+// encryption/publishing overhead -- see sendWhatsAppSlotList).
 const CLOSING_WITH_BOOKING_OFFER =
-  "Perfect, thank you for sharing that with us! Let's get you one step closer to your new property. Just reply with a date and time that works best for you and we'll get your visit booked in right away. If you'd prefer, one of our property consultants can reach out shortly to coordinate your schedule personally instead.";
+  "Perfect, thank you for sharing that with us! Let's get you one step closer to your new property. Pick a time below that works best for you and we'll get your visit booked in right away. If you'd prefer, one of our property consultants can reach out shortly to coordinate your schedule personally instead.";
 
-// Sent once qualification completes but no listing was matched -- there's
-// nothing to book a visit against, so this goes straight to human handoff
-// (the same fallback the original script offered as an alternative).
-const CLOSING_NO_PROPERTY_MATCH =
+// Sent once qualification completes but there's nothing to offer a slot
+// list against -- no listing was matched, no agent is available to assign
+// it to, or that agent has no open slots in the next two weeks. Goes
+// straight to human handoff (the same fallback the original script
+// offered as an alternative); deliberately generic since it covers all
+// three of those reasons, not just "no property matched".
+const CLOSING_HUMAN_HANDOFF =
   "Perfect, thank you for sharing that with us! Let's get you one step closer to your new property. One of our property consultants will reach out to you shortly to coordinate a viewing that works for you.";
 
 const BOOKING_CONFIRMED = (whenLabel: string) =>
@@ -151,8 +155,67 @@ const pickAgentForBooking = async (
   return chosen.id;
 };
 
+// Fixed viewing hours (Nairobi time) offered as slot options -- a simple,
+// predictable schedule rather than trying to model each agent's actual
+// working hours, which nothing else in this codebase tracks per-agent.
+const VISIT_HOURS_EAT = [9, 11, 14, 16];
+
+/**
+ * Generates up to `count` open slots for `agentId` over the next two
+ * weeks, skipping Sundays and anything the agent already has a booking
+ * against (exact-timestamp match only -- bookings have no duration field
+ * anywhere in this system to check real overlap against). All date math
+ * is done in UTC-shifted-by-EAT_OFFSET_HOURS terms so it's correct
+ * regardless of the server's own local timezone.
+ */
+const generateAvailableSlots = async (
+  tx: Prisma.TransactionClient,
+  agentId: string,
+  count: number,
+): Promise<{ start: Date; label: string }[]> => {
+  const nairobiNow = new Date(Date.now() + EAT_OFFSET_HOURS * 60 * 60 * 1000);
+  const baseYear = nairobiNow.getUTCFullYear();
+  const baseMonth = nairobiNow.getUTCMonth();
+  const baseDate = nairobiNow.getUTCDate();
+  const minLeadTimeMs = 60 * 60 * 1000; // don't offer anything less than 1h out
+
+  const candidates: Date[] = [];
+  for (let dayOffset = 0; dayOffset < 14 && candidates.length < count * 3; dayOffset++) {
+    const weekday = new Date(Date.UTC(baseYear, baseMonth, baseDate + dayOffset)).getUTCDay(); // 0 = Sunday
+    if (weekday === 0) continue;
+
+    for (const hour of VISIT_HOURS_EAT) {
+      const slotUtc = new Date(Date.UTC(baseYear, baseMonth, baseDate + dayOffset, hour - EAT_OFFSET_HOURS, 0, 0));
+      if (slotUtc.getTime() - Date.now() < minLeadTimeMs) continue;
+      candidates.push(slotUtc);
+    }
+  }
+
+  const existing = await tx.booking.findMany({
+    where: { agentId, scheduledAt: { in: candidates } },
+    select: { scheduledAt: true },
+  });
+  const busy = new Set(existing.map((b) => b.scheduledAt.getTime()));
+
+  return candidates
+    .filter((slot) => !busy.has(slot.getTime()))
+    .slice(0, count)
+    .map((start) => ({
+      start,
+      label: start.toLocaleString('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Africa/Nairobi',
+      }),
+    }));
+};
+
 export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMessage): Promise<void> => {
-  if (message.messageType && message.messageType !== 'text') {
+  if (message.messageType && message.messageType !== 'text' && message.messageType !== 'interactive') {
     return; // media-only message -- nothing to qualify on yet
   }
 
@@ -228,8 +291,23 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
     if (lead.awaitingBookingReply) {
       await tx.lead.update({ where: { id: lead.id }, data: { awaitingBookingReply: false } });
 
-      const nowNairobi = new Date(Date.now() + EAT_OFFSET_HOURS * 60 * 60 * 1000);
-      const scheduledAt = await parseScheduledDateTime(messageText, nowNairobi);
+      // The tapped slot's row id IS its exact ISO datetime (see
+      // generateAvailableSlots/sendWhatsAppSlotList) -- no parsing needed,
+      // and this is the expected path now that a slot list is offered.
+      // Free-text AI parsing is only a fallback for a client who typed a
+      // reply instead of tapping (or whose WhatsApp client doesn't render
+      // interactive messages).
+      let scheduledAt: Date | null = null;
+      if (message.interactiveReplyId) {
+        const tapped = new Date(message.interactiveReplyId);
+        if (!Number.isNaN(tapped.getTime()) && tapped.getTime() > Date.now()) {
+          scheduledAt = tapped;
+        }
+      }
+      if (!scheduledAt) {
+        const nowNairobi = new Date(Date.now() + EAT_OFFSET_HOURS * 60 * 60 * 1000);
+        scheduledAt = await parseScheduledDateTime(messageText, nowNairobi);
+      }
 
       if (!scheduledAt || !lead.propertyId) {
         return { leadId: lead.id, leadName: lead.fullName ?? undefined, reply: BOOKING_UNPARSEABLE, justQualified: false };
@@ -303,9 +381,29 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
         updateData.lastCapiFiredAt = new Date();
       }
 
-      const offerBooking = Boolean(lead.propertyId);
-      if (offerBooking) {
-        updateData.awaitingBookingReply = true;
+      // Lock in the agent now (not when the client picks a slot) so the
+      // slot list itself can be filtered against that specific agent's
+      // calendar -- see pickAgentForBooking for why this doesn't disturb
+      // an already-claimed lead.
+      let slotOffer: { bodyText: string; slots: WhatsAppSlotOption[]; transcriptBody: string } | null = null;
+      if (lead.propertyId) {
+        const agentId = await pickAgentForBooking(tx, { id: lead.id, claimedByAgentId: lead.claimedByAgentId });
+        if (agentId) {
+          const isVirtual = lead.visitPreference === 'virtual';
+          const slots = await generateAvailableSlots(tx, agentId, 8);
+          if (slots.length > 0) {
+            updateData.awaitingBookingReply = true;
+            slotOffer = {
+              bodyText: CLOSING_WITH_BOOKING_OFFER,
+              slots: slots.map((slot) => ({
+                id: slot.start.toISOString(),
+                title: slot.label,
+                description: isVirtual ? 'Virtual tour' : 'Physical visit',
+              })),
+              transcriptBody: `[Offered visit times: ${slots.map((slot) => slot.label).join(', ')}]`,
+            };
+          }
+        }
       }
 
       await tx.lead.update({ where: { id: lead.id }, data: updateData });
@@ -313,7 +411,8 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
       return {
         leadId: lead.id,
         leadName: lead.fullName ?? undefined,
-        reply: offerBooking ? CLOSING_WITH_BOOKING_OFFER : CLOSING_NO_PROPERTY_MATCH,
+        reply: slotOffer ? null : CLOSING_HUMAN_HANDOFF,
+        slotOffer,
         justQualified: true,
         shouldFireCapi: !capiRecentlyFired,
         ctwaClid: lead.ctwaClid,
@@ -347,7 +446,22 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
     };
   });
 
-  if (outcome.reply) {
+  if (outcome.slotOffer) {
+    try {
+      await sendWhatsAppSlotList(rawWaId, outcome.slotOffer.bodyText, outcome.slotOffer.slots);
+      await withSystemContext(async (tx) => {
+        const botMessage = await tx.leadMessage.create({
+          data: { leadId: outcome.leadId, direction: 'outbound', senderType: 'bot', body: outcome.slotOffer!.transcriptBody },
+        });
+        await tx.lead.update({ where: { id: outcome.leadId }, data: { lastMessageAt: botMessage.createdAt } });
+      });
+    } catch (error) {
+      // Same non-fatal handling as the plain-text reply path below -- the
+      // lead sits waiting for its next inbound message instead of getting
+      // the slot list, rather than this failing the whole handler.
+      console.error('[WhatsApp] Slot list send failed (lead data already saved):', error);
+    }
+  } else if (outcome.reply) {
     try {
       const replyText = await generateBotReply({
         cannedReply: outcome.reply,

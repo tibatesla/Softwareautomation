@@ -28,6 +28,24 @@ export class WhatsAppSendError extends Error {
   }
 }
 
+const postMessage = async (body: Record<string, unknown>): Promise<void> => {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (!phoneNumberId) {
+    throw new Error('Missing critical WHATSAPP_PHONE_NUMBER_ID environment configuration.');
+  }
+  const token = await resolveActiveSecret('meta', 'META_WHATSAPP_ACCESS_TOKEN');
+
+  try {
+    await axios.post(`${GRAPH_API_BASE}/${phoneNumberId}/messages`, body, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (error) {
+    const metaError = axios.isAxiosError(error) ? error.response?.data?.error : undefined;
+    const detail = axios.isAxiosError(error) ? JSON.stringify(error.response?.data) : error;
+    throw new WhatsAppSendError(`WhatsApp Cloud API message delivery failed: ${detail}`, metaError?.code);
+  }
+};
+
 /**
  * Sends a plain-text message within an open 24-hour customer service
  * window (i.e. the contact has messaged us within the last 24 hours --
@@ -37,26 +55,49 @@ export class WhatsAppSendError extends Error {
  * (a different Graph API call), not needed for the qualification flow.
  */
 export const sendWhatsAppText = async (waId: string, text: string): Promise<void> => {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  if (!phoneNumberId) {
-    throw new Error('Missing critical WHATSAPP_PHONE_NUMBER_ID environment configuration.');
-  }
-  const token = await resolveActiveSecret('meta', 'META_WHATSAPP_ACCESS_TOKEN');
+  await postMessage({
+    messaging_product: 'whatsapp',
+    to: waId,
+    type: 'text',
+    text: { body: text },
+  });
+};
 
-  try {
-    await axios.post(
-      `${GRAPH_API_BASE}/${phoneNumberId}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        to: waId,
-        type: 'text',
-        text: { body: text },
+export interface WhatsAppSlotOption {
+  /** Opaque to Meta, echoed back verbatim in the webhook reply -- carries the slot's exact ISO datetime so picking one needs no parsing at all. */
+  id: string;
+  /** Meta caps list row titles at 24 characters -- truncated defensively here, but callers should already keep it short. */
+  title: string;
+  description?: string;
+}
+
+/**
+ * Sends a tappable list of time-slot options instead of asking the lead to
+ * type a date/time freehand -- fully native (no external link, no WhatsApp
+ * Flows encryption/publishing overhead), and picking a row is deterministic
+ * (no AI parsing, no ambiguity about what date they meant). Same 24-hour
+ * window rule as sendWhatsAppText.
+ */
+export const sendWhatsAppSlotList = async (waId: string, bodyText: string, slots: WhatsAppSlotOption[]): Promise<void> => {
+  await postMessage({
+    messaging_product: 'whatsapp',
+    to: waId,
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      body: { text: bodyText.slice(0, 4096) },
+      action: {
+        button: 'Pick a time',
+        sections: [
+          {
+            rows: slots.slice(0, 10).map((slot) => ({
+              id: slot.id,
+              title: slot.title.slice(0, 24),
+              ...(slot.description ? { description: slot.description.slice(0, 72) } : {}),
+            })),
+          },
+        ],
       },
-      { headers: { Authorization: `Bearer ${token}` } },
-    );
-  } catch (error) {
-    const metaError = axios.isAxiosError(error) ? error.response?.data?.error : undefined;
-    const detail = axios.isAxiosError(error) ? JSON.stringify(error.response?.data) : error;
-    throw new WhatsAppSendError(`WhatsApp Cloud API message delivery failed: ${detail}`, metaError?.code);
-  }
+    },
+  });
 };
