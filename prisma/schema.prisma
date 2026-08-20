@@ -74,43 +74,45 @@ model Property {
 }
 
 model Lead {
-  id                  String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  fullName            String?                 @map("full_name")
-  phoneNumber         String                  @map("phone_number")
-  email               String?
-  source              String?
-  propertyId          String?                 @map("property_id") @db.Uuid
-  qualificationStatus LeadQualificationStatus @default(new) @map("qualification_status")
-  budgetRange         String?                 @map("budget_range")
-  preferredUnit       String?                 @map("preferred_unit")
-  purchaseTimeline    String?                 @map("purchase_timeline")
-  targetSegment       LeadSegment?            @map("target_segment")
-  countryCode         String?                 @map("country_code")
-  requiresProxyVisit  Boolean                 @default(false) @map("requires_proxy_visit")
-  proxyPhoneNumber    String?                 @map("proxy_phone_number")
-  isOvernightDiaspora Boolean                 @default(false) @map("is_overnight_diaspora")
-  fbclid              String?
-  claimedAt           DateTime?               @map("claimed_at") @db.Timestamptz(6)
-  claimedByAgentId    String?                 @map("claimed_by_agent_id") @db.Uuid
-  lastCapiFiredAt     DateTime?               @map("last_capi_fired_at") @db.Timestamptz(6)
-  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
-  tags                String[]                @default([])
-  investmentType      String?                 @map("investment_type")
-  transactionType     String?                 @map("transaction_type")
-  dealStage           DealStage               @default(new) @map("deal_stage")
-  propertyInterestRaw String?                 @map("property_interest_raw")
-  ctwaClid            String?                 @map("ctwa_clid")
-  adSourceId          String?                 @map("ad_source_id")
-  adSourcePlatform    AdPlatform?             @map("ad_source_platform")
-  lastMessageAt       DateTime?               @map("last_message_at") @db.Timestamptz(6)
-  agentPenalties      AgentPenalty[]
-  bookings            Booking[]
-  messages            LeadMessage[]
-  reads               LeadRead[]
-  claimedByAgent      User?                   @relation(fields: [claimedByAgentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  property            Property?               @relation(fields: [propertyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  payments            Payment[]
+  id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fullName             String?                 @map("full_name")
+  phoneNumber          String                  @map("phone_number")
+  email                String?
+  source               String?
+  propertyId           String?                 @map("property_id") @db.Uuid
+  qualificationStatus  LeadQualificationStatus @default(new) @map("qualification_status")
+  budgetRange          String?                 @map("budget_range")
+  preferredUnit        String?                 @map("preferred_unit")
+  purchaseTimeline     String?                 @map("purchase_timeline")
+  targetSegment        LeadSegment?            @map("target_segment")
+  countryCode          String?                 @map("country_code")
+  requiresProxyVisit   Boolean                 @default(false) @map("requires_proxy_visit")
+  proxyPhoneNumber     String?                 @map("proxy_phone_number")
+  isOvernightDiaspora  Boolean                 @default(false) @map("is_overnight_diaspora")
+  fbclid               String?
+  claimedAt            DateTime?               @map("claimed_at") @db.Timestamptz(6)
+  claimedByAgentId     String?                 @map("claimed_by_agent_id") @db.Uuid
+  lastCapiFiredAt      DateTime?               @map("last_capi_fired_at") @db.Timestamptz(6)
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tags                 String[]                @default([])
+  investmentType       String?                 @map("investment_type")
+  transactionType      String?                 @map("transaction_type")
+  dealStage            DealStage               @default(new) @map("deal_stage")
+  propertyInterestRaw  String?                 @map("property_interest_raw")
+  ctwaClid             String?                 @map("ctwa_clid")
+  adSourceId           String?                 @map("ad_source_id")
+  adSourcePlatform     AdPlatform?             @map("ad_source_platform")
+  lastMessageAt        DateTime?               @map("last_message_at") @db.Timestamptz(6)
+  visitPreference      String?                 @map("visit_preference")
+  awaitingBookingReply Boolean                 @default(false) @map("awaiting_booking_reply")
+  agentPenalties       AgentPenalty[]
+  bookings             Booking[]
+  messages             LeadMessage[]
+  reads                LeadRead[]
+  claimedByAgent       User?                   @relation(fields: [claimedByAgentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  property             Property?               @relation(fields: [propertyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payments             Payment[]
 
   @@index([claimedByAgentId], map: "idx_leads_claimed_by")
   @@index([phoneNumber], map: "idx_leads_phone")

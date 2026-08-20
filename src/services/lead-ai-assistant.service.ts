@@ -68,7 +68,11 @@ export const generateBotReply = async (params: GenerateBotReplyParams): Promise<
       systemPrompt: SYSTEM_PROMPT,
       userMessage: userContext,
       temperature: 0.4,
-      maxTokens: 150,
+      // Generous headroom: the configured Groq model is a reasoning model
+      // that spends tokens on an internal "reasoning" field before the
+      // actual reply -- too low a budget here gets the response truncated
+      // to nothing (verified live against a much simpler prompt).
+      maxTokens: 500,
       useOllamaFallback: false,
     });
   } catch (error) {

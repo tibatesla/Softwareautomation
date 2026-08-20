@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { format, isSameDay, isToday } from "date-fns";
-import { CalendarDays, CalendarCheck2, Video, CircleX } from "lucide-react";
-import { useBookings, useUpdateBooking } from "@/lib/queries/bookings";
+import { CalendarDays, CalendarCheck2, Video, CircleX, Trash2 } from "lucide-react";
+import { useBookings, useBulkDeleteBookings, useUpdateBooking } from "@/lib/queries/bookings";
 import { useProperties } from "@/lib/queries/properties";
 import { useLeads } from "@/lib/queries/leads";
 import { useUsers } from "@/lib/queries/users";
@@ -15,6 +15,7 @@ import type { Booking, BookingStatus } from "@/lib/types";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { StatCard } from "@/components/stat-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -70,6 +71,8 @@ export default function BookingsPage() {
   const { data: properties } = useProperties();
   const { data: leads } = useLeads();
   const { data: users } = useUsers({ enabled: canAssign });
+  const bulkDelete = useBulkDeleteBookings();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const bookedDays = useMemo(() => bookings?.map((b) => new Date(b.scheduledAt)) ?? [], [bookings]);
 
@@ -80,6 +83,44 @@ export default function BookingsPage() {
       : bookings.filter((b) => selectedDate && isSameDay(new Date(b.scheduledAt), selectedDate));
     return [...filtered].sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
   }, [bookings, selectedDate, showAll]);
+
+  // Owner/admin can delete any booking; an agent can only delete their own
+  // (matches the RLS scoping the backend already enforces).
+  const canDelete = (booking: Booking) => canAssign || booking.agentId === user?.id;
+  const deletableVisible = visibleBookings.filter(canDelete);
+  const allSelected = deletableVisible.length > 0 && deletableVisible.every((b) => selected.has(b.id));
+
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(deletableVisible.map((b) => b.id)));
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const count = selected.size;
+    if (!window.confirm(`Delete ${count} booking${count === 1 ? "" : "s"}? This can't be undone.`)) return;
+    try {
+      const result = await bulkDelete.mutateAsync([...selected]);
+      setSelected(new Set());
+      if (result.failed.length === 0) {
+        toast.success(`Deleted ${result.deleted.length} booking${result.deleted.length === 1 ? "" : "s"}`);
+      } else {
+        toast.error(
+          `Deleted ${result.deleted.length}, couldn't delete ${result.failed.length}: ${result.failed
+            .map((f) => f.error)
+            .join(" ")}`,
+        );
+      }
+    } catch {
+      toast.error("Bulk delete failed");
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -143,10 +184,36 @@ export default function BookingsPage() {
             </Button>
           </div>
 
+          {selected.size > 0 && (
+            <div className="flex items-center justify-between rounded-lg border bg-muted/50 px-4 py-2">
+              <span className="text-sm font-medium">{selected.size} selected</span>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setSelected(new Set())}>
+                  Clear
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDelete.isPending}
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete selected
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
+                  {deletableVisible.length > 0 && (
+                    <TableHead className="w-10">
+                      <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all" />
+                    </TableHead>
+                  )}
                   <TableHead>{showAll ? "Date" : "Time"}</TableHead>
                   <TableHead>Property</TableHead>
                   <TableHead>Lead</TableHead>
@@ -163,6 +230,17 @@ export default function BookingsPage() {
                   const agent = users?.find((u) => u.id === booking.agentId);
                   return (
                     <TableRow key={booking.id}>
+                      {deletableVisible.length > 0 && (
+                        <TableCell>
+                          {canDelete(booking) && (
+                            <Checkbox
+                              checked={selected.has(booking.id)}
+                              onCheckedChange={() => toggleOne(booking.id)}
+                              aria-label={`Select booking on ${format(new Date(booking.scheduledAt), "PP p")}`}
+                            />
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell>
                         {format(new Date(booking.scheduledAt), showAll ? "PP p" : "p")}
                       </TableCell>
@@ -189,7 +267,10 @@ export default function BookingsPage() {
                 })}
                 {visibleBookings.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={canAssign ? 7 : 6} className="text-center text-muted-foreground">
+                    <TableCell
+                      colSpan={(canAssign ? 7 : 6) + (deletableVisible.length > 0 ? 1 : 0)}
+                      className="text-center text-muted-foreground"
+                    >
                       No bookings {showAll ? "yet" : "on this date"}.
                     </TableCell>
                   </TableRow>

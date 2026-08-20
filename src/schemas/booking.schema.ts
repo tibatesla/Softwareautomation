@@ -19,5 +19,9 @@ export const updateBookingSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const bulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1),
+});
+
 export type CreateBookingPayload = z.infer<typeof createBookingSchema>;
 export type UpdateBookingPayload = z.infer<typeof updateBookingSchema>;

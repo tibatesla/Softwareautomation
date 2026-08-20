@@ -99,6 +99,10 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         <Field label="Source" value={lead.source} />
         <Field label="Property" value={property?.title} />
         <Field label="Deal stage" value={lead.dealStage.replace(/_/g, " ")} />
+        <Field
+          label="Visit preference"
+          value={lead.visitPreference === "virtual" ? "Virtual tour" : lead.visitPreference === "in_person" ? "In person" : null}
+        />
         <Field label="Target segment" value={lead.targetSegment} />
         <Field label="Budget range" value={lead.budgetRange} />
         <Field label="Preferred unit" value={lead.preferredUnit} />

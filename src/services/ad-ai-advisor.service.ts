@@ -45,7 +45,11 @@ export const generateAdvisory = async (platform: AdProvider, campaignId: string,
         'You are an ad performance advisor for a Kenyan real estate company. Give one short, specific, actionable recommendation (2-3 sentences max) based on the data. Do not promise a specific ROAS or CPL outcome -- only recommend an action and explain why.',
       userMessage: `Platform: ${platform}\nCampaign: ${campaignId}\nAd: ${adId}\n\nRecent hourly performance:\n${summary}\n\nRecent rule engine decisions:\n${ruleHistory}`,
       temperature: 0.3,
-      maxTokens: 200,
+      // Generous headroom: the configured Groq model is a reasoning model
+      // that spends tokens on an internal "reasoning" field before the
+      // actual advisory text -- too low a budget here gets the response
+      // truncated to nothing.
+      maxTokens: 400,
     });
 
     await withSystemContext((tx) =>

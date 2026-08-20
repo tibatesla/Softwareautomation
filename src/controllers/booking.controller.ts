@@ -1,8 +1,8 @@
 // src/controllers/booking.controller.ts
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { withRLSContext } from '../config/database';
-import { createBookingSchema, updateBookingSchema } from '../schemas/booking.schema';
+import { withRLSContext, AppRole } from '../config/database';
+import { createBookingSchema, updateBookingSchema, bulkDeleteSchema } from '../schemas/booking.schema';
 
 export const listBookings = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id, role } = req.user!;
@@ -87,4 +87,53 @@ export const updateBooking = async (req: AuthenticatedRequest, res: Response): P
   } catch {
     res.status(404).json({ error: 'Booking not found' });
   }
+};
+
+/**
+ * Same access shape as update: RLS (bookings_owner_admin_all /
+ * bookings_agent_own, both bare USING clauses) lets Owner/Admin delete any
+ * booking and an Agent delete only their own, no route-level role check
+ * needed. Nothing else references a booking as a foreign key, so unlike
+ * deleteProperty/deleteLead there's no linked-record check here.
+ */
+const deleteBookingCore = async (userId: string, role: AppRole, bookingId: string): Promise<boolean> => {
+  try {
+    await withRLSContext(userId, role, (tx) => tx.booking.delete({ where: { id: bookingId } }));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const deleteBooking = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id, role } = req.user!;
+  const ok = await deleteBookingCore(id, role, req.params.id);
+  if (!ok) {
+    res.status(404).json({ error: 'Booking not found' });
+    return;
+  }
+  res.status(204).send();
+};
+
+export const bulkDeleteBookings = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const parseResult = bulkDeleteSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Malformed request', details: parseResult.error.errors });
+    return;
+  }
+
+  const { id, role } = req.user!;
+  const results = await Promise.all(
+    parseResult.data.ids.map(async (bookingId) => {
+      const ok = await deleteBookingCore(id, role, bookingId);
+      return ok
+        ? { id: bookingId, deleted: true as const }
+        : { id: bookingId, deleted: false as const, error: 'Booking not found (or not yours to delete)' };
+    }),
+  );
+
+  res.status(200).json({
+    deleted: results.filter((r) => r.deleted).map((r) => r.id),
+    failed: results.filter((r): r is { id: string; deleted: false; error: string } => !r.deleted),
+  });
 };

@@ -132,6 +132,7 @@ export interface Lead {
   propertyInterestRaw: string | null;
   ctwaClid: string | null;
   lastMessageAt: string | null;
+  visitPreference: "in_person" | "virtual" | null;
   // Not a DB column -- computed per-request in listLeads, scoped to the
   // calling user's own read state (see lead_reads / migration 030).
   unreadCount: number;

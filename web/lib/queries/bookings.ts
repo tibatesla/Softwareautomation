@@ -44,3 +44,19 @@ export function useUpdateBooking(id: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: bookingsKey }),
   });
 }
+
+export interface BulkDeleteResult {
+  deleted: string[];
+  failed: { id: string; error: string }[];
+}
+
+// Owner/admin can delete any booking; an agent can only delete their own --
+// enforced by RLS (see bookings_owner_admin_all / bookings_agent_own).
+export function useBulkDeleteBookings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiFetch<BulkDeleteResult>("/bookings/bulk-delete", { method: "POST", body: JSON.stringify({ ids }) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: bookingsKey }),
+  });
+}
