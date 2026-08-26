@@ -42,6 +42,9 @@ const propertyFormSchema = z.object({
   view: z.string().optional(),
   paymentPlanStructure: z.string().optional(),
   houseSizeSqft: optionalNumberInput,
+  houseSizeSqftMin: optionalNumberInput,
+  houseSizeSqftMax: optionalNumberInput,
+  developmentName: z.string().optional(),
   amenities: z.array(z.string()).optional(),
   subLocation: z.string().optional(),
 });
@@ -78,6 +81,9 @@ function toDefaultValues(property?: Property): Partial<PropertyFormValues> {
     view: property.view ?? "",
     paymentPlanStructure: property.paymentPlanStructure ?? "",
     houseSizeSqft: property.houseSizeSqft ? Number(property.houseSizeSqft) : undefined,
+    houseSizeSqftMin: property.houseSizeSqftMin ? Number(property.houseSizeSqftMin) : undefined,
+    houseSizeSqftMax: property.houseSizeSqftMax ? Number(property.houseSizeSqftMax) : undefined,
+    developmentName: property.developmentName ?? "",
     amenities: property.amenities,
     subLocation: property.subLocation ?? "",
   };
@@ -124,6 +130,8 @@ export function PropertyForm({ property }: { property?: Property }) {
       totalUnits: toNumber(values.totalUnits),
       levelFloors: toNumber(values.levelFloors),
       houseSizeSqft: toNumber(values.houseSizeSqft),
+      houseSizeSqftMin: toNumber(values.houseSizeSqftMin),
+      houseSizeSqftMax: toNumber(values.houseSizeSqftMax),
       assignedAgentId: values.assignedAgentId || undefined,
       developerEmail: values.developerEmail || undefined,
       referenceId: values.referenceId || undefined,
@@ -146,6 +154,19 @@ export function PropertyForm({ property }: { property?: Property }) {
           <Label htmlFor="title">Title</Label>
           <Input id="title" {...register("title")} />
           {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
+        </div>
+
+        <div className="flex flex-col gap-2 sm:col-span-2">
+          <Label htmlFor="developmentName">Development / project group</Label>
+          <Input
+            id="developmentName"
+            placeholder="e.g. Steller Bay Residence"
+            {...register("developmentName")}
+          />
+          <p className="text-xs text-muted-foreground">
+            Properties sharing this name are grouped together on the Properties page. Leave blank if this isn&apos;t
+            part of a multi-unit development.
+          </p>
         </div>
 
         <div className="flex flex-col gap-2 sm:col-span-2">
@@ -291,6 +312,14 @@ export function PropertyForm({ property }: { property?: Property }) {
         <div className="flex flex-col gap-2">
           <Label htmlFor="houseSizeSqft">House size (sqm)</Label>
           <Input id="houseSizeSqft" type="number" step="0.01" {...register("houseSizeSqft")} />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="houseSizeSqftMin">House size min (sqm)</Label>
+          <Input id="houseSizeSqftMin" type="number" step="0.01" {...register("houseSizeSqftMin")} />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="houseSizeSqftMax">House size max (sqm)</Label>
+          <Input id="houseSizeSqftMax" type="number" step="0.01" {...register("houseSizeSqftMax")} />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="view">View</Label>

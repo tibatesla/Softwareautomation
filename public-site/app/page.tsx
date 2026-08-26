@@ -20,7 +20,7 @@ export default async function HomePage() {
   return (
     <div>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-navy-dark text-white">
+      <section className="relative overflow-hidden bg-onyx text-ivory">
         <div className="pointer-events-none absolute -right-24 -top-24 size-[28rem] rounded-full bg-gold/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -left-16 size-[26rem] rounded-full bg-gold/10 blur-3xl" />
 
@@ -30,20 +30,20 @@ export default async function HomePage() {
             Structured Property Solutions in{" "}
             <span className="text-gold">Nairobi&apos;s</span> Finest Neighborhoods
           </h1>
-          <p className="max-w-xl text-base text-white/70 md:text-lg">
+          <p className="max-w-xl text-base text-stone md:text-lg">
             Curated homes and apartments in Kilimani, Kileleshwa, Westlands, Lavington, Karen, and
             Riverside Drive — every listing verified, every enquiry handled by a dedicated consultant.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/properties"
-              className="rounded-sm bg-gold px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-navy-dark transition-colors hover:bg-gold-light"
+              className="rounded-sm bg-gold px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-onyx transition-colors hover:bg-gold-light"
             >
               Browse Properties
             </Link>
             <Link
               href="/#contact"
-              className="rounded-sm border border-white/30 px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-white transition-colors hover:border-gold hover:text-gold"
+              className="rounded-sm border border-white/20 px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-ivory transition-colors hover:border-gold hover:text-gold"
             >
               Get in Touch
             </Link>
@@ -55,7 +55,7 @@ export default async function HomePage() {
       <section id="areas" className="container-page py-24">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Where We Operate</span>
-          <h2 className="mt-3 font-serif text-3xl font-semibold text-navy md:text-4xl">Areas We Serve</h2>
+          <h2 className="mt-3 font-serif text-3xl font-semibold text-ivory md:text-4xl">Areas We Serve</h2>
           <div className="gold-rule mx-auto mt-4" />
         </div>
 
@@ -64,13 +64,13 @@ export default async function HomePage() {
             <Link
               key={area}
               href={`/properties?area=${encodeURIComponent(area)}`}
-              className="group relative flex flex-col justify-end overflow-hidden rounded-md bg-navy p-8 text-white transition-transform hover:-translate-y-1"
+              className="group relative flex flex-col justify-end overflow-hidden rounded-md border border-white/10 bg-onyx-light p-8 text-ivory transition-all hover:-translate-y-1 hover:border-gold/40"
               style={{ minHeight: "180px" }}
             >
-              <div className="absolute inset-0 bg-gradient-to-t from-navy-dark via-navy/60 to-transparent transition-opacity group-hover:opacity-80" />
+              <div className="absolute inset-0 bg-gradient-to-t from-onyx via-onyx/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
               <div className="relative">
                 <h3 className="font-serif text-2xl font-semibold">{area}</h3>
-                <p className="mt-1 text-sm text-white/70">{AREA_TAGLINES[area]}</p>
+                <p className="mt-1 text-sm text-stone">{AREA_TAGLINES[area]}</p>
                 <span className="mt-3 inline-block text-xs font-semibold uppercase tracking-wider text-gold opacity-0 transition-opacity group-hover:opacity-100">
                   View Listings →
                 </span>
@@ -82,14 +82,14 @@ export default async function HomePage() {
 
       {/* Featured properties */}
       {featured.length > 0 && (
-        <section className="bg-white py-24">
+        <section className="bg-onyx-light py-24">
           <div className="container-page">
             <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
               <div>
                 <span className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Handpicked</span>
-                <h2 className="mt-3 font-serif text-3xl font-semibold text-navy md:text-4xl">Featured Listings</h2>
+                <h2 className="mt-3 font-serif text-3xl font-semibold text-ivory md:text-4xl">Featured Listings</h2>
               </div>
-              <Link href="/properties" className="text-sm font-semibold text-navy underline-offset-4 hover:underline">
+              <Link href="/properties" className="text-sm font-semibold text-gold underline-offset-4 hover:underline">
                 View all properties →
               </Link>
             </div>
@@ -122,7 +122,7 @@ export default async function HomePage() {
           ].map((item) => (
             <div key={item.title}>
               <div className="gold-rule" />
-              <h3 className="mt-4 font-serif text-xl font-semibold text-navy">{item.title}</h3>
+              <h3 className="mt-4 font-serif text-xl font-semibold text-ivory">{item.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-stone">{item.body}</p>
             </div>
           ))}

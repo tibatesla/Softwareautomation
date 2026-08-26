@@ -87,6 +87,9 @@ export const createPropertySchema = z.object({
   view: z.string().optional(),
   paymentPlanStructure: z.string().optional(),
   houseSizeSqft: z.number().nonnegative().optional(),
+  houseSizeSqftMin: z.number().nonnegative().optional(),
+  houseSizeSqftMax: z.number().nonnegative().optional(),
+  developmentName: z.string().optional(),
   amenities: z.array(z.enum(propertyAmenityValues)).optional(),
   subLocation: z.string().optional(),
   images: z.array(z.string().url()).optional(), // any number, from any CDN (Cloudinary or otherwise)

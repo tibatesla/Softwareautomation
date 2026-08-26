@@ -15,7 +15,9 @@ import paymentRoutes from './routes/payment.routes';
 import userRoutes from './routes/user.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
 import adPerformanceRoutes from './routes/ad-performance.routes';
+import agentPerformanceRoutes from './routes/agent-performance.routes';
 import publicPropertyRoutes from './routes/public-property.routes';
+import publicBookingRoutes from './routes/public-booking.routes';
 import { AuthenticatedRequest } from './middlewares/auth.middleware'; // Needed for req.rawBody typing
 
 const app: Application = express();
@@ -62,8 +64,14 @@ app.use('/api/webhooks/whatsapp', whatsappRoutes);
 // Module 4: Ad Optimization Engine
 app.use('/api/ad-performance', adPerformanceRoutes);
 
+app.use('/api/agent-performance', agentPerformanceRoutes);
+
 // Public customer website (chestoneproperties.com) -- no auth, read-only, field-restricted in the controller.
 app.use('/api/public/properties', publicPropertyRoutes);
+
+// Web booking link sent alongside the WhatsApp bot's tap-to-book buttons --
+// no auth, gated by the unguessable token in the URL (see public-booking.controller.ts).
+app.use('/api/public/bookings', publicBookingRoutes);
 
 // Fallback for unhandled routes
 app.use((req: Request, res: Response) => {

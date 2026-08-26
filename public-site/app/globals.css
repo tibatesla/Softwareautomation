@@ -1,27 +1,28 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-navy: var(--navy);
-  --color-navy-dark: var(--navy-dark);
-  --color-navy-light: var(--navy-light);
+  --color-onyx: var(--onyx);
+  --color-onyx-light: var(--onyx-light);
+  --color-onyx-lighter: var(--onyx-lighter);
   --color-gold: var(--gold);
   --color-gold-light: var(--gold-light);
   --color-ivory: var(--ivory);
-  --color-ink: var(--ink);
   --color-stone: var(--stone);
   --font-serif: var(--font-playfair);
   --font-sans: var(--font-inter);
 }
 
 :root {
-  --navy: #002b5b;
-  --navy-dark: #001c3d;
-  --navy-light: #003d7a;
-  --gold: #c5a059;
-  --gold-light: #d9bc84;
-  --ivory: #faf8f4;
-  --ink: #14213d;
-  --stone: #6b7280;
+  /* Warm near-black, luxury-real-estate palette -- three depths of the
+     same dark hue rather than flat black, so cards/panels read as raised
+     surfaces against the page instead of just a lighter grey box. */
+  --onyx: #0f0c08;
+  --onyx-light: #1a140d;
+  --onyx-lighter: #2b2318;
+  --gold: #c9a15c;
+  --gold-light: #e3c489;
+  --ivory: #f4efe6;
+  --stone: #a89d8c;
 }
 
 * {
@@ -33,8 +34,8 @@ html {
 }
 
 body {
-  background: var(--ivory);
-  color: var(--ink);
+  background: var(--onyx);
+  color: var(--ivory);
   font-family: var(--font-sans);
 }
 
@@ -44,7 +45,7 @@ h1, h2, h3, h4, .font-display {
 
 ::selection {
   background: var(--gold);
-  color: var(--navy-dark);
+  color: var(--onyx);
 }
 
 /* Subtle gold underline accent, used under section headings */

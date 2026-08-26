@@ -99,6 +99,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
         <Field label="Total units" value={property.totalUnits} />
         <Field label="Level / floors" value={property.levelFloors} />
         <Field label="House size (sqm)" value={property.houseSizeSqft} />
+        <Field label="House size range (sqm)" value={`${property.houseSizeSqftMin ?? "—"} - ${property.houseSizeSqftMax ?? "—"}`} />
         <Field label="View" value={property.view} />
         <Field label="Sub-location" value={property.subLocation} />
         <Field label="Completion time" value={property.completionTime} />

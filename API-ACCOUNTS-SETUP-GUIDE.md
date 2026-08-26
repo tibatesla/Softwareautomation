@@ -69,6 +69,12 @@ Two kinds of credentials show up below:
       <td style="padding:10px 14px; border:1px solid #cbd5e1;">Live</td>
       <td style="padding:10px 14px; border:1px solid #cbd5e1;">Static</td>
     </tr>
+    <tr style="background-color:#ffffff;">
+      <td style="padding:10px 14px; border:1px solid #cbd5e1;"><strong>Meta Content Publishing</strong></td>
+      <td style="padding:10px 14px; border:1px solid #cbd5e1;">Auto-posts a new listing to Facebook/Instagram on first photo upload (Module 5)</td>
+      <td style="padding:10px 14px; border:1px solid #cbd5e1;">Code deployed, <strong>awaiting credentials</strong> — see Section 9</td>
+      <td style="padding:10px 14px; border:1px solid #cbd5e1;">Static + rotatable</td>
+    </tr>
   </tbody>
 </table>
 
@@ -326,6 +332,44 @@ Property photos/videos upload to `chestone/properties/<property-id>/` in your Cl
 
 ---
 
+## 9. Meta Content Publishing (Facebook Page + Instagram auto-post)
+
+Separate from Section 3 above: that one reads ad *performance* and manages *existing* ad campaigns; this one *publishes* a photo post to your Facebook Page (and, once linked, Instagram) automatically the moment a new property listing gets its first photo in the CRM. Reuses the same Meta app + System User from Sections 2/3 — no new app needed, just a broader token.
+
+<table style="border-collapse:collapse; width:100%; font-family:sans-serif;">
+  <thead>
+    <tr style="background-color:#dbe4f0; color:#1e3a5f; font-weight:700; border-bottom:2px solid #1e3a5f;">
+      <th style="padding:10px 14px; border:1px solid #cbd5e1; text-align:left;">Env Var / Secret Key</th>
+      <th style="padding:10px 14px; border:1px solid #cbd5e1; text-align:left;">Type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background-color:#ffffff;">
+      <td style="padding:10px 14px; border:1px solid #cbd5e1;"><code>META_INSTAGRAM_BUSINESS_ACCOUNT_ID</code></td>
+      <td style="padding:10px 14px; border:1px solid #cbd5e1;">Static (<code>.env</code>) — omit entirely to auto-post to Facebook only, no Instagram</td>
+    </tr>
+    <tr style="background-color:#f1f5f9;">
+      <td style="padding:10px 14px; border:1px solid #cbd5e1;"><code>META_CONTENT_PUBLISHING_TOKEN</code></td>
+      <td style="padding:10px 14px; border:1px solid #cbd5e1;">Rotatable (<code>system_secrets</code>, provider <code>meta</code>) — a Page access token, not a System User token directly (see step 3)</td>
+    </tr>
+  </tbody>
+</table>
+
+Reuses the already-configured `META_PAGE_ID` (Section 3) as the Facebook Page to post to.
+
+1. **(Instagram only) Link your Instagram Business account to the Page.** Meta Business Suite → your Page → Settings → Linked Accounts → Instagram → connect the account. It must be a Business or Creator account, not a personal one.
+2. **Grant the extra permissions.** Business Settings → Users → System Users → the same System User used in Sections 2/3 → **Add Assets** → under the **Pages** tab, add your Page with **Full control** (if not already assigned there for Section 3's `META_PAGE_ID` lookup) → **Generate Token** → select the app → check **pages_manage_posts**, **pages_read_engagement**, and (if doing Instagram) **instagram_basic** + **instagram_content_publish** → expiration **Never**.
+3. **Exchange it for a Page access token.** The token from step 2 is still a User/System User token — Facebook Page publishing needs a Page-specific token instead: `GET https://graph.facebook.com/v25.0/{META_PAGE_ID}?fields=access_token` using the token from step 2 as `access_token` in the request. The `access_token` field in the response is `META_CONTENT_PUBLISHING_TOKEN` — this is what actually goes into `system_secrets` (see [How rotatable secrets get stored](#how-rotatable-secrets-get-stored)), not the raw System User token.
+4. **(Instagram only) Get the Instagram Business Account ID.** `GET https://graph.facebook.com/v25.0/{META_PAGE_ID}?fields=instagram_business_account` using the same Page access token from step 3. The nested `id` field is `META_INSTAGRAM_BUSINESS_ACCOUNT_ID`.
+
+**This token doesn't auto-refresh** (unlike `META_MARKETING_API_TOKEN`'s daily cron in Section 3) — if generated with "Never" expiration in step 2, it shouldn't need rotating, but re-run `upsertSecret` (see below) if Meta ever reports it invalid.
+
+**What actually gets posted:** a photo post using the property's first uploaded image, a caption built from its title, location, and price, and a link back to its live page on chestoneproperties.com. See `src/services/social-publishing.service.ts`. Nothing is posted for a property with no photos yet — the CRM's photo-upload step is what triggers this, not the initial "create listing" step.
+
+**Not yet supported: TikTok.** TikTok's Content Posting API is a completely separate developer account, app, and API from the Meta one above — same category of setup as Section 5's TikTok *Ads* integration, but for organic content instead of ads. Worth a future module if/when needed, not an extension of this one.
+
+---
+
 ## How rotatable secrets get stored
 
 Anything marked "Rotatable" above does **not** go into `.env`. It's read at runtime from the `system_secrets` table via `resolveActiveSecret()` (`src/services/system-secrets.service.ts`), which deliberately fails closed — if the row is missing or expired, the platform refuses to make that API call rather than silently doing nothing or falling back to a stale value.
@@ -337,6 +381,7 @@ import { upsertSecret } from './src/services/system-secrets.service';
 
 await upsertSecret('meta', 'META_MARKETING_API_TOKEN', '<the real token>', new Date('2026-09-27')); // ~60 days out
 await upsertSecret('meta', 'META_WHATSAPP_ACCESS_TOKEN', '<the real token>'); // System User token, no fixed expiry if generated with "Never"
+await upsertSecret('meta', 'META_CONTENT_PUBLISHING_TOKEN', '<the real Page access token>'); // no fixed expiry if generated with "Never" -- see Section 9
 await upsertSecret('google', 'GOOGLE_ADS_REFRESH_TOKEN', '<the real refresh token>'); // no expiresAt -- doesn't expire on a schedule
 await upsertSecret('tiktok', 'TIKTOK_ADS_ACCESS_TOKEN', '<the real access token>');
 ```

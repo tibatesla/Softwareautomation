@@ -7,31 +7,44 @@
 // text is taken as the property interest and best-effort matched against
 // existing listings.
 //
-// From there the script branches on visit preference (CRM Handoff, revised
-// script): one question decides in-person vs virtual, then a second,
-// branch-specific question that asks two things in a single message (e.g.
-// budget + cash-or-financing). A single free-text reply answering two
-// things at once is parsed into separate structured fields by
-// lead-answer-extraction.service.ts, not by this state machine directly --
-// this file only decides WHICH stage a lead is at and what to do with the
-// (already-extracted) answer.
+// From there the script branches on visit preference (client's revised
+// script, tap-button version): a button question decides in-person vs
+// virtual, then a second button question classifies the branch-specific
+// detail (how they'd fund it / their timeline) with no AI parsing needed --
+// the tapped button's id IS the answer. A client who types instead of
+// tapping falls back to an AI classifier in
+// lead-answer-extraction.service.ts. A third, free-text follow-up then
+// asks the one thing that still needs an open answer (budget amount, or
+// the diaspora proxy-visit check) -- this state machine only decides WHICH
+// stage a lead is at and what to send/store at each one.
 //
 // Once qualified, if the opening message matched a real listing, the bot
-// offers to book a visit right there in the chat -- the client's reply is
-// parsed as a date/time and turned into a real bookings row (same
-// dealStage-advancing side effect as a booking made in the CRM UI). If no
+// offers to book a visit right there in the chat -- either by tapping a
+// slot in the WhatsApp message list, or via a web booking link sent right
+// after it (same slots, same booking-scheduling.service.ts logic either
+// way). A free-text reply instead of a tap is parsed as a date/time. If no
 // listing was matched, or the date/time can't be understood, the flow
 // hands off to a human consultant instead of guessing.
+import { randomBytes } from 'crypto';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { withSystemContext } from '../config/database';
 import { Prisma } from '../../generated/prisma';
 import { LeadTrackingService } from './tracking.service';
-import { sendWhatsAppText, sendWhatsAppSlotList, WhatsAppSlotOption } from './whatsapp-cloud-api.service';
+import {
+  sendWhatsAppText,
+  sendWhatsAppButtons,
+  sendWhatsAppSlotList,
+  WhatsAppButtonOption,
+  WhatsAppSlotOption,
+} from './whatsapp-cloud-api.service';
 import { generateBotReply } from './lead-ai-assistant.service';
+import { EAT_OFFSET_HOURS, pickAgentForBooking, generateAvailableSlots, confirmLeadBooking } from './booking-scheduling.service';
 import {
   classifyVisitPreference,
+  classifyTransactionType,
+  classifyTimeline,
   extractBudgetAnswer,
-  extractTimelineAnswer,
+  extractProxyVisitAnswer,
   parseScheduledDateTime,
 } from './lead-answer-extraction.service';
 import { dispatchQualifiedLeadEvent } from './meta-capi.service';
@@ -41,21 +54,72 @@ import { NormalizedInboundMessage } from '../schemas/whatsapp.schema';
 const tracking = new LeadTrackingService();
 
 const QUESTION_VISIT_PREFERENCE =
-  'Thank you so much for reaching out! We would love to help you find the perfect space. To let you truly experience what this property has to offer, would you prefer to walk through it in person this week, or would a premium guided virtual tour suit you better?';
+  "Welcome to Chestone Properties. We're thrilled you reached out, and we'd love to help you secure the right space.\n\nTo make sure you get a true feel for this property and its potential, how would you prefer to explore it?";
 
-const QUESTION_IN_PERSON_DETAILS =
-  'Wonderful. We want to ensure every property we show you perfectly aligns with your vision and respects your time. Could you share a rough budget you are comfortable with, and whether you are leaning toward a cash purchase or financing?';
+const VISIT_PREFERENCE_BUTTONS: WhatsAppButtonOption[] = [
+  { id: 'site_visit', title: 'Site Visit' },
+  { id: 'virtual_tour', title: 'Virtual Tour' },
+];
 
-const QUESTION_VIRTUAL_DETAILS =
-  'We completely understand that securing a property from afar requires a lot of trust. We will set up a detailed virtual walkthrough for you. To help us prepare, are you hoping to find the right property in the next 30-60 days, and do you have a trusted representative here to view it alongside you?';
+const QUESTION_CAPITAL_READINESS =
+  "Wonderful. We want to ensure every property we show you perfectly aligns with your vision -- and we never want to waste your time on options that don't fit your strategy.\n\nTo help our Account Executives curate the right portfolio for you, how are you planning to structure the initial investment?";
+
+const CAPITAL_READINESS_BUTTONS: WhatsAppButtonOption[] = [
+  { id: 'cash', title: 'Cash / Liquid' },
+  { id: 'off_plan', title: 'Off-Plan' },
+  { id: 'mortgage', title: 'Mortgage' },
+];
+
+// Stored in leads.transaction_type verbatim (a free string column, no DB
+// enum) -- keyed by the same ids the buttons/AI fallback use, so both paths
+// land on one readable label rather than a raw slug like "off_plan".
+const TRANSACTION_TYPE_LABELS: Record<string, string> = {
+  cash: 'Cash / Liquid Funds',
+  off_plan: 'Off-Plan Installments',
+  mortgage: 'Mortgage Financing',
+};
+
+const QUESTION_BUDGET_FOLLOWUP =
+  'Excellent choice. And roughly what budget are you working with, so we can tailor the shortlist precisely to your goals?';
+
+const QUESTION_TIMELINE_CHECK =
+  "We completely understand that securing a property from afar requires a massive amount of trust. We've guided many investors through this, and we'll arrange a detailed, high-resolution virtual walkthrough for you.\n\nTo help us align with developer availability and ensure you don't miss out on current pricing, when are you hoping to finalize your decision?";
+
+const TIMELINE_BUTTONS: WhatsAppButtonOption[] = [
+  { id: '1_14_days', title: '1-14 Days' },
+  { id: '30_60_days', title: '30-60 Days' },
+  { id: 'researching', title: 'Just Researching' },
+];
+
+// Same idea as TRANSACTION_TYPE_LABELS, for leads.purchase_timeline.
+const TIMELINE_LABELS: Record<string, string> = {
+  '1_14_days': 'Immediately (1-14 Days)',
+  '30_60_days': 'Within 30-60 Days',
+  researching: 'Just Researching For Now',
+};
+
+const QUESTION_PROXY_FOLLOWUP =
+  'Noted. One last thing -- do you have a trusted representative here in Kenya who could join the viewing on your behalf?';
 
 // Sent as the body of the tappable slot-list message, once qualification
 // completes AND the opening message matched a real listing with at least
 // one open slot -- lets the client pick an exact time instead of typing
-// one freehand, fully native (no external calendar link, no WhatsApp Flows
-// encryption/publishing overhead -- see sendWhatsAppSlotList).
+// one freehand, fully native (no WhatsApp Flows encryption/publishing
+// overhead -- see sendWhatsAppSlotList). The web booking link below is
+// sent as a separate follow-up message right after this one, not fused
+// into the same body -- an alternative for a client who'd rather browse
+// on a bigger screen, never a replacement for the tap flow.
 const CLOSING_WITH_BOOKING_OFFER =
-  "Perfect, thank you for sharing that with us! Let's get you one step closer to your new property. Pick a time below that works best for you and we'll get your visit booked in right away. If you'd prefer, one of our property consultants can reach out shortly to coordinate your schedule personally instead.";
+  "Perfect, thank you for sharing that with us. Your preferences are securely logged.\n\nLet's get you one step closer to your new property. Pick a time below that works best for you and we'll get your visit booked in right away. If you'd prefer, one of our dedicated Account Executives will review your details and reach out shortly to coordinate personally instead.";
+
+// Base URL of the public customer website -- falls back to the known
+// production domain the same way public-site/lib/format.ts's WhatsApp
+// links do, so a missing env var degrades to "still correct in prod"
+// rather than a broken link.
+const PUBLIC_SITE_URL = process.env.PUBLIC_SITE_URL || 'https://chestoneproperties.com';
+
+const BOOKING_LINK_FOLLOWUP = (link: string) =>
+  `Prefer to browse and pick a time on a bigger screen? You can also book here: ${link}`;
 
 // Sent once qualification completes but there's nothing to offer a slot
 // list against -- no listing was matched, no agent is available to assign
@@ -64,7 +128,7 @@ const CLOSING_WITH_BOOKING_OFFER =
 // offered as an alternative); deliberately generic since it covers all
 // three of those reasons, not just "no property matched".
 const CLOSING_HUMAN_HANDOFF =
-  "Perfect, thank you for sharing that with us! Let's get you one step closer to your new property. One of our property consultants will reach out to you shortly to coordinate a viewing that works for you.";
+  "Perfect, thank you for sharing that with us. Your preferences are securely logged. One of our dedicated Account Executives will review your details and reach out to you shortly to coordinate a viewing that works for you.";
 
 const BOOKING_CONFIRMED = (whenLabel: string) =>
   `You're all set! Your visit is booked for ${whenLabel}. We look forward to seeing you then -- if anything changes, just let us know.`;
@@ -93,8 +157,6 @@ const HUMAN_HANDOFF_WINDOW_MINUTES = 5;
 // twice for the same lead (e.g. two webhook deliveries racing each other).
 const CAPI_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
-const EAT_OFFSET_HOURS = 3; // Kenya is fixed UTC+3 year-round, no DST -- same assumption agent-sla.service.ts makes.
-
 /**
  * Best-effort match of free-text property interest against existing
  * listings. rawText is now the client's whole opening message (e.g. "Hi,
@@ -120,98 +182,6 @@ const tryMatchProperty = async (
   );
 
   return matches.length === 1 ? matches[0].id : undefined;
-};
-
-/**
- * Picks who a self-booked visit gets assigned to. If the lead is already
- * claimed, that agent keeps it -- a booking shouldn't silently reassign a
- * lead someone is actively working. Otherwise, round-robin among on-duty
- * agents (same ordering agent-sla.service.ts uses), falling back to any
- * active agent if none are on duty right now: WhatsApp runs 24/7, and a
- * visit request outside working hours still needs an owner, unlike the
- * SLA cron's own auto-assign which can just wait for the next tick.
- */
-const pickAgentForBooking = async (
-  tx: Prisma.TransactionClient,
-  lead: { id: string; claimedByAgentId: string | null },
-): Promise<string | undefined> => {
-  if (lead.claimedByAgentId) return lead.claimedByAgentId;
-
-  const onDutyAgent = await tx.user.findFirst({
-    where: { role: 'agent', isActive: true, isOnDuty: true },
-    orderBy: [{ lastLeadAssignedAt: { sort: 'asc', nulls: 'first' } }],
-  });
-  const chosen =
-    onDutyAgent ??
-    (await tx.user.findFirst({
-      where: { role: 'agent', isActive: true },
-      orderBy: [{ lastLeadAssignedAt: { sort: 'asc', nulls: 'first' } }],
-    }));
-  if (!chosen) return undefined;
-
-  const now = new Date();
-  await tx.lead.update({ where: { id: lead.id }, data: { claimedByAgentId: chosen.id, claimedAt: now } });
-  await tx.user.update({ where: { id: chosen.id }, data: { lastLeadAssignedAt: now } });
-  return chosen.id;
-};
-
-// Fixed viewing hours (Nairobi time) offered as slot options -- a simple,
-// predictable schedule rather than trying to model each agent's actual
-// working hours, which nothing else in this codebase tracks per-agent.
-const VISIT_HOURS_EAT = [9, 11, 14, 16];
-
-/**
- * Generates up to `count` open slots for `agentId` over the next two
- * weeks, skipping Sundays and anything the agent already has a booking
- * against (exact-timestamp match only -- bookings have no duration field
- * anywhere in this system to check real overlap against). All date math
- * is done in UTC-shifted-by-EAT_OFFSET_HOURS terms so it's correct
- * regardless of the server's own local timezone.
- */
-const generateAvailableSlots = async (
-  tx: Prisma.TransactionClient,
-  agentId: string,
-  count: number,
-): Promise<{ start: Date; label: string }[]> => {
-  const nairobiNow = new Date(Date.now() + EAT_OFFSET_HOURS * 60 * 60 * 1000);
-  const baseYear = nairobiNow.getUTCFullYear();
-  const baseMonth = nairobiNow.getUTCMonth();
-  const baseDate = nairobiNow.getUTCDate();
-  const minLeadTimeMs = 60 * 60 * 1000; // don't offer anything less than 1h out
-
-  const candidates: Date[] = [];
-  for (let dayOffset = 0; dayOffset < 14 && candidates.length < count * 3; dayOffset++) {
-    const weekday = new Date(Date.UTC(baseYear, baseMonth, baseDate + dayOffset)).getUTCDay(); // 0 = Sunday
-    if (weekday === 0) continue;
-
-    for (const hour of VISIT_HOURS_EAT) {
-      const slotUtc = new Date(Date.UTC(baseYear, baseMonth, baseDate + dayOffset, hour - EAT_OFFSET_HOURS, 0, 0));
-      if (slotUtc.getTime() - Date.now() < minLeadTimeMs) continue;
-      candidates.push(slotUtc);
-    }
-  }
-
-  const existing = await tx.booking.findMany({
-    where: { agentId, scheduledAt: { in: candidates } },
-    select: { scheduledAt: true },
-  });
-  const busy = new Set(existing.map((b) => b.scheduledAt.getTime()));
-
-  return candidates
-    .filter((slot) => !busy.has(slot.getTime()))
-    .slice(0, count)
-    .map((start) => ({
-      start,
-      label: start.toLocaleString('en-GB', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-        timeZone: 'Africa/Nairobi',
-      }),
-    }));
 };
 
 export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMessage): Promise<void> => {
@@ -282,14 +252,22 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
     // First-ever message just triggers lead creation + the opening
     // question; it isn't itself an answer to anything the bot has asked.
     if (isNewLead) {
-      return { leadId: lead.id, leadName: lead.fullName ?? undefined, reply: QUESTION_VISIT_PREFERENCE, justQualified: false };
+      return {
+        leadId: lead.id,
+        leadName: lead.fullName ?? undefined,
+        buttonOffer: { bodyText: QUESTION_VISIT_PREFERENCE, buttons: VISIT_PREFERENCE_BUTTONS, transcriptBody: '[Sent: Site Visit / Virtual Tour buttons]' },
+        justQualified: false,
+      };
     }
 
     // Stage: awaiting a scheduling reply for a self-booked visit -- takes
     // priority over everything else, since this is a direct answer to the
     // bot's own most recent question, not a fresh qualification message.
     if (lead.awaitingBookingReply) {
-      await tx.lead.update({ where: { id: lead.id }, data: { awaitingBookingReply: false } });
+      // The booking link (if the client uses it instead) clears both of
+      // these itself -- see public-booking.controller.ts -- but a WhatsApp
+      // reply arriving here needs to do the same on this path.
+      await tx.lead.update({ where: { id: lead.id }, data: { awaitingBookingReply: false, bookingToken: null } });
 
       // The tapped slot's row id IS its exact ISO datetime (see
       // generateAvailableSlots/sendWhatsAppSlotList) -- no parsing needed,
@@ -309,69 +287,75 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
         scheduledAt = await parseScheduledDateTime(messageText, nowNairobi);
       }
 
-      if (!scheduledAt || !lead.propertyId) {
+      if (!scheduledAt) {
         return { leadId: lead.id, leadName: lead.fullName ?? undefined, reply: BOOKING_UNPARSEABLE, justQualified: false };
       }
 
-      const agentId = await pickAgentForBooking(tx, lead);
-      if (!agentId) {
+      const confirmation = await confirmLeadBooking(tx, lead, scheduledAt, 'WhatsApp');
+      if (!confirmation.ok) {
         return { leadId: lead.id, leadName: lead.fullName ?? undefined, reply: BOOKING_UNPARSEABLE, justQualified: false };
       }
-
-      await tx.booking.create({
-        data: {
-          propertyId: lead.propertyId,
-          leadId: lead.id,
-          agentId,
-          scheduledAt,
-          isVirtual: lead.visitPreference === 'virtual',
-          notes: 'Self-booked via WhatsApp',
-        },
-      });
-      // Same dealStage-advancing side effect a booking made in the CRM UI
-      // has (see createBooking in booking.controller.ts) -- only from the
-      // initial stage, so this never regresses a deal further along.
-      await tx.lead.updateMany({ where: { id: lead.id, dealStage: 'new' }, data: { dealStage: 'site_visit_scheduled' } });
-
-      const whenLabel = scheduledAt.toLocaleString('en-KE', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        hour: 'numeric',
-        minute: '2-digit',
-        timeZone: 'Africa/Nairobi',
-      });
-      return { leadId: lead.id, leadName: lead.fullName ?? undefined, reply: BOOKING_CONFIRMED(whenLabel), justQualified: false };
+      return { leadId: lead.id, leadName: lead.fullName ?? undefined, reply: BOOKING_CONFIRMED(confirmation.whenLabel), justQualified: false };
     }
 
-    // Stage 1: visit preference not yet answered.
+    // Stage 1: visit preference not yet answered. The deterministic tap
+    // path is tried first (message.interactiveReplyId matches one of
+    // VISIT_PREFERENCE_BUTTONS' ids); classifyVisitPreference is only a
+    // fallback for a client who typed a free-text reply instead.
     if (!lead.visitPreference) {
-      const preference = (await classifyVisitPreference(messageText)) ?? 'in_person';
+      const preference =
+        message.interactiveReplyId === 'virtual_tour'
+          ? 'virtual'
+          : message.interactiveReplyId === 'site_visit'
+            ? 'in_person'
+            : ((await classifyVisitPreference(messageText)) ?? 'in_person');
       await tx.lead.update({ where: { id: lead.id }, data: { visitPreference: preference } });
-      const nextQuestion = preference === 'virtual' ? QUESTION_VIRTUAL_DETAILS : QUESTION_IN_PERSON_DETAILS;
-      return { leadId: lead.id, leadName: lead.fullName ?? undefined, reply: nextQuestion, justQualified: false };
+      const buttonOffer =
+        preference === 'virtual'
+          ? { bodyText: QUESTION_TIMELINE_CHECK, buttons: TIMELINE_BUTTONS, transcriptBody: '[Sent: Timeline Check buttons]' }
+          : { bodyText: QUESTION_CAPITAL_READINESS, buttons: CAPITAL_READINESS_BUTTONS, transcriptBody: '[Sent: Capital Readiness buttons]' };
+      return { leadId: lead.id, leadName: lead.fullName ?? undefined, buttonOffer, justQualified: false };
     }
 
-    // Stage 2: branch-specific details not yet answered. requiresProxyVisit
-    // is a non-nullable column (defaults false), so purchaseTimeline is the
-    // only reliable signal for whether the virtual branch's question has
-    // been asked yet -- it always gets set (at minimum to the raw reply)
-    // once answered, see below.
-    const detailsMissing =
-      lead.visitPreference === 'virtual'
-        ? !lead.purchaseTimeline
-        : !lead.budgetRange || !lead.transactionType;
+    // Stage 2: branch-specific classification (transactionType / purchaseTimeline)
+    // not yet answered -- same tap-first, AI-fallback pattern as Stage 1.
+    const classificationMissing = lead.visitPreference === 'virtual' ? !lead.purchaseTimeline : !lead.transactionType;
 
-    if (detailsMissing) {
+    if (classificationMissing) {
+      if (lead.visitPreference === 'virtual') {
+        const timelineKey =
+          message.interactiveReplyId && message.interactiveReplyId in TIMELINE_LABELS
+            ? message.interactiveReplyId
+            : ((await classifyTimeline(messageText)) ?? 'researching');
+        await tx.lead.update({ where: { id: lead.id }, data: { purchaseTimeline: TIMELINE_LABELS[timelineKey] } });
+      } else {
+        const transactionKey =
+          message.interactiveReplyId && message.interactiveReplyId in TRANSACTION_TYPE_LABELS
+            ? message.interactiveReplyId
+            : ((await classifyTransactionType(messageText)) ?? 'cash');
+        await tx.lead.update({ where: { id: lead.id }, data: { transactionType: TRANSACTION_TYPE_LABELS[transactionKey] } });
+      }
+      const followUpQuestion = lead.visitPreference === 'virtual' ? QUESTION_PROXY_FOLLOWUP : QUESTION_BUDGET_FOLLOWUP;
+      return { leadId: lead.id, leadName: lead.fullName ?? undefined, reply: followUpQuestion, justQualified: false };
+    }
+
+    // Stage 3: the branch-specific free-text follow-up kept alongside the
+    // new button classification -- budget amount (site visit) or the
+    // diaspora proxy-visit check (virtual tour), same fields the original
+    // script captured, just asked as their own message now instead of
+    // bundled into the classification question.
+    const followUpMissing = lead.visitPreference === 'virtual' ? lead.requiresProxyVisit === null : !lead.budgetRange;
+
+    if (followUpMissing) {
       const updateData: Record<string, unknown> = {};
       if (lead.visitPreference === 'virtual') {
-        const { purchaseTimeline, requiresProxyVisit } = await extractTimelineAnswer(messageText);
-        updateData.purchaseTimeline = purchaseTimeline ?? messageText;
-        if (requiresProxyVisit !== null) updateData.requiresProxyVisit = requiresProxyVisit;
+        // Always resolved to a concrete boolean (never left null) so this
+        // stage can't loop forever re-asking the same question if the AI
+        // extraction can't tell -- absent a clear "yes", assume no proxy.
+        updateData.requiresProxyVisit = (await extractProxyVisitAnswer(messageText)) ?? false;
       } else {
-        const { budgetRange, transactionType } = await extractBudgetAnswer(messageText);
+        const { budgetRange } = await extractBudgetAnswer(messageText);
         updateData.budgetRange = budgetRange ?? messageText;
-        if (transactionType) updateData.transactionType = transactionType;
       }
 
       updateData.qualificationStatus = 'qualified';
@@ -386,6 +370,7 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
       // calendar -- see pickAgentForBooking for why this doesn't disturb
       // an already-claimed lead.
       let slotOffer: { bodyText: string; slots: WhatsAppSlotOption[]; transcriptBody: string } | null = null;
+      let bookingLink: string | null = null;
       if (lead.propertyId) {
         const agentId = await pickAgentForBooking(tx, { id: lead.id, claimedByAgentId: lead.claimedByAgentId });
         if (agentId) {
@@ -402,6 +387,12 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
               })),
               transcriptBody: `[Offered visit times: ${slots.map((slot) => slot.label).join(', ')}]`,
             };
+            // Sent alongside the tap buttons, not instead of them (see
+            // CLOSING_WITH_BOOKING_OFFER) -- the same slots the buttons
+            // offer are also bookable through this link.
+            const token = randomBytes(24).toString('hex');
+            updateData.bookingToken = token;
+            bookingLink = `${PUBLIC_SITE_URL}/book/${token}`;
           }
         }
       }
@@ -413,6 +404,7 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
         leadName: lead.fullName ?? undefined,
         reply: slotOffer ? null : CLOSING_HUMAN_HANDOFF,
         slotOffer,
+        bookingLink,
         justQualified: true,
         shouldFireCapi: !capiRecentlyFired,
         ctwaClid: lead.ctwaClid,
@@ -460,6 +452,40 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
       // lead sits waiting for its next inbound message instead of getting
       // the slot list, rather than this failing the whole handler.
       console.error('[WhatsApp] Slot list send failed (lead data already saved):', error);
+    }
+
+    // Sent as its own follow-up message right after the slot list, not
+    // fused into one message -- best-effort and independently failable:
+    // the lead can still tap a slot above even if this one send fails.
+    if (outcome.bookingLink) {
+      try {
+        const linkText = BOOKING_LINK_FOLLOWUP(outcome.bookingLink);
+        await sendWhatsAppText(rawWaId, linkText);
+        await withSystemContext(async (tx) => {
+          const botMessage = await tx.leadMessage.create({
+            data: { leadId: outcome.leadId, direction: 'outbound', senderType: 'bot', body: linkText },
+          });
+          await tx.lead.update({ where: { id: outcome.leadId }, data: { lastMessageAt: botMessage.createdAt } });
+        });
+      } catch (error) {
+        console.error('[WhatsApp] Booking link send failed (slot list still sent):', error);
+      }
+    }
+  } else if (outcome.buttonOffer) {
+    // Not run through generateBotReply's AI rephrasing -- same reasoning
+    // as the slot list above: the body text is written to sit alongside a
+    // fixed set of buttons, and a rephrase could drift from referencing
+    // them correctly.
+    try {
+      await sendWhatsAppButtons(rawWaId, outcome.buttonOffer.bodyText, outcome.buttonOffer.buttons);
+      await withSystemContext(async (tx) => {
+        const botMessage = await tx.leadMessage.create({
+          data: { leadId: outcome.leadId, direction: 'outbound', senderType: 'bot', body: outcome.buttonOffer!.transcriptBody },
+        });
+        await tx.lead.update({ where: { id: outcome.leadId }, data: { lastMessageAt: botMessage.createdAt } });
+      });
+    } catch (error) {
+      console.error('[WhatsApp] Button send failed (lead data already saved):', error);
     }
   } else if (outcome.reply) {
     try {

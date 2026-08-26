@@ -23,6 +23,9 @@ export interface PublicProperty {
   completionTime: string | null;
   paymentPlanStructure: string | null;
   houseSizeSqft: string | null;
+  houseSizeSqftMin: string | null;
+  houseSizeSqftMax: string | null;
+  developmentName: string | null;
   amenities: string[];
   images: string[];
   videos: string[];
@@ -41,6 +44,14 @@ export const PRICE_BANDS: { value: string; label: string }[] = [
   { value: "20m-40m", label: "KES 20M – 40M" },
   { value: "40m-60m", label: "KES 40M – 60M" },
   { value: "60m-plus", label: "KES 60M+" },
+];
+
+// Matches PUBLIC_SIZE_BANDS in src/controllers/public-property.controller.ts.
+export const SIZE_BANDS: { value: string; label: string }[] = [
+  { value: "under-50", label: "Under 50 sqm" },
+  { value: "50-100", label: "50 – 100 sqm" },
+  { value: "100-200", label: "100 – 200 sqm" },
+  { value: "200-plus", label: "200+ sqm" },
 ];
 
 export const SORT_OPTIONS: { value: string; label: string }[] = [

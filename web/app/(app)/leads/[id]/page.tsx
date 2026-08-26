@@ -111,7 +111,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         <Field label="Transaction type" value={lead.transactionType} />
         <Field label="Country code" value={lead.countryCode} />
         <Field label="Overnight diaspora" value={lead.isOvernightDiaspora ? "Yes" : "No"} />
-        <Field label="Requires proxy visit" value={lead.requiresProxyVisit ? "Yes" : "No"} />
+        <Field label="Requires proxy visit" value={lead.requiresProxyVisit === null ? null : lead.requiresProxyVisit ? "Yes" : "No"} />
         <Field label="Proxy phone number" value={lead.proxyPhoneNumber} />
         <Field label="Claimed at" value={lead.claimedAt ? new Date(lead.claimedAt).toLocaleString() : null} />
       </section>

@@ -2,6 +2,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { withRLSContext, withSystemContext } from '../config/database';
+import { Prisma } from '../../generated/prisma';
 import { hashPassword } from '../services/auth.service';
 import { createUserSchema, updateUserSchema, updateOwnDutySchema } from '../schemas/user.schema';
 
@@ -91,11 +92,16 @@ export const updateUser = async (req: AuthenticatedRequest, res: Response): Prom
 
 /**
  * Owner-only (route + the bare users_owner_admin_all RLS policy, which
- * applies to all commands including DELETE once granted). Every relation
- * on User is a NoAction foreign key, so Postgres would reject this anyway
- * for a user with any history -- checked explicitly first so the caller
- * gets a clear, specific reason instead of a raw FK-violation error, and
- * so a user with real history can be pointed at deactivation instead.
+ * applies to all commands including DELETE once granted). Only bookings and
+ * payments actually block the delete -- both reference the user via a
+ * required (non-nullable) FK, so they're real business/financial records
+ * that must be preserved, same reasoning as deleteLeadCore. Everything else
+ * on the account is cleaned up first: claimed leads are unclaimed, assigned/
+ * created properties and rotated secrets have the reference cleared (all
+ * nullable), and the user's own lead_reads and agent_penalties rows are
+ * deleted outright -- a read-marker or penalty with no user behind it isn't
+ * a record worth keeping, unlike a penalty's *lead* reference (see 028),
+ * where the agent side is the essential half.
  */
 export const deleteUser = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id, role } = req.user!;
@@ -112,17 +118,7 @@ export const deleteUser = async (req: AuthenticatedRequest, res: Response): Prom
         where: { id: targetId },
         select: {
           role: true,
-          _count: {
-            select: {
-              agentPenalties: true,
-              bookings: true,
-              leads: true,
-              payments: true,
-              assignedProperties: true,
-              createdProperties: true,
-              rotatedSecrets: true,
-            },
-          },
+          _count: { select: { bookings: true, payments: true } },
         },
       }),
     );
@@ -146,10 +142,29 @@ export const deleteUser = async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
-    await withRLSContext(id, role, (tx) => tx.user.delete({ where: { id: targetId } }));
+    // Other users can hold read-markers on leads this account read too, but
+    // never the reverse here -- this only ever touches targetId's own rows,
+    // which the caller's own RLS context can't reach (lead_reads_own is
+    // scoped to the caller's own user_id, not an arbitrary target).
+    await withSystemContext((tx) => tx.leadRead.deleteMany({ where: { userId: targetId } }));
+
+    await withRLSContext(id, role, async (tx) => {
+      await tx.agentPenalty.deleteMany({ where: { agentId: targetId } });
+      await tx.lead.updateMany({ where: { claimedByAgentId: targetId }, data: { claimedByAgentId: null, claimedAt: null } });
+      await tx.property.updateMany({ where: { assignedAgentId: targetId }, data: { assignedAgentId: null } });
+      await tx.property.updateMany({ where: { createdBy: targetId }, data: { createdBy: null } });
+      await tx.systemSecret.updateMany({ where: { rotatedBy: targetId }, data: { rotatedBy: null } });
+      await tx.user.delete({ where: { id: targetId } });
+    });
+
     res.status(204).send();
-  } catch {
-    res.status(404).json({ error: 'User not found' });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+    console.error('[User] Delete failed:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
   }
 };
 

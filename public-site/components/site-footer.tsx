@@ -36,7 +36,7 @@ const SOCIAL_LINKS = [
 
 export function SiteFooter() {
   return (
-    <footer id="contact" className="border-t border-white/10 bg-navy-dark text-white/80">
+    <footer id="contact" className="border-t border-white/10 bg-onyx-light text-white/80">
       <div className="container-page grid gap-12 py-16 md:grid-cols-4">
         <div className="md:col-span-2">
           <div className="flex items-center gap-3">
@@ -102,7 +102,7 @@ export function SiteFooter() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={social.name}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 transition-colors hover:bg-gold hover:text-navy-dark"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 transition-colors hover:bg-gold hover:text-onyx"
               >
                 {social.icon}
               </a>

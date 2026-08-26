@@ -63,6 +63,38 @@ export const sendWhatsAppText = async (waId: string, text: string): Promise<void
   });
 };
 
+export interface WhatsAppButtonOption {
+  /** Opaque to Meta, echoed back verbatim in the webhook reply -- carries the button's meaning (e.g. "cash") so picking one needs no parsing at all. */
+  id: string;
+  /** Meta caps button reply titles at 20 characters -- truncated defensively here, but callers should already keep it short. */
+  title: string;
+}
+
+/**
+ * Sends up to 3 tappable reply buttons instead of asking the lead to type a
+ * free-text answer -- same "deterministic tap, no AI parsing needed"
+ * rationale as sendWhatsAppSlotList, but for a short fixed set of choices
+ * (Meta's button type caps out at 3; anything larger needs the list type
+ * instead). Same 24-hour window rule as sendWhatsAppText.
+ */
+export const sendWhatsAppButtons = async (waId: string, bodyText: string, buttons: WhatsAppButtonOption[]): Promise<void> => {
+  await postMessage({
+    messaging_product: 'whatsapp',
+    to: waId,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: bodyText.slice(0, 1024) },
+      action: {
+        buttons: buttons.slice(0, 3).map((button) => ({
+          type: 'reply',
+          reply: { id: button.id, title: button.title.slice(0, 20) },
+        })),
+      },
+    },
+  });
+};
+
 export interface WhatsAppSlotOption {
   /** Opaque to Meta, echoed back verbatim in the webhook reply -- carries the slot's exact ISO datetime so picking one needs no parsing at all. */
   id: string;

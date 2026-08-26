@@ -54,7 +54,7 @@ function toDefaultValues(lead?: Lead): Partial<LeadFormValues> {
     purchaseTimeline: lead.purchaseTimeline ?? "",
     targetSegment: lead.targetSegment ?? undefined,
     countryCode: lead.countryCode ?? "",
-    requiresProxyVisit: lead.requiresProxyVisit,
+    requiresProxyVisit: lead.requiresProxyVisit ?? undefined,
     proxyPhoneNumber: lead.proxyPhoneNumber ?? "",
     isOvernightDiaspora: lead.isOvernightDiaspora,
     tags: lead.tags.join(", "),

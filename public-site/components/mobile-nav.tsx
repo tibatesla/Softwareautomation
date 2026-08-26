@@ -21,7 +21,7 @@ export function MobileNav() {
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-10 w-10 items-center justify-center rounded-sm text-navy"
+        className="flex h-10 w-10 items-center justify-center rounded-sm text-ivory"
       >
         {open ? (
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -38,14 +38,14 @@ export function MobileNav() {
       </button>
 
       {open && (
-        <div className="fixed inset-x-0 top-20 z-40 border-b border-black/5 bg-ivory shadow-lg">
+        <div className="fixed inset-x-0 top-20 z-40 border-b border-white/10 bg-onyx shadow-lg">
           <nav className="container-page flex flex-col gap-1 py-4">
             {LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="rounded-sm px-2 py-3 text-base font-medium text-ink transition-colors hover:bg-navy/5 hover:text-navy"
+                className="rounded-sm px-2 py-3 text-base font-medium text-stone transition-colors hover:bg-white/5 hover:text-ivory"
               >
                 {link.label}
               </Link>
@@ -53,7 +53,7 @@ export function MobileNav() {
             <Link
               href="/properties"
               onClick={() => setOpen(false)}
-              className="mt-2 rounded-sm bg-navy px-4 py-3 text-center text-sm font-medium text-white transition-colors hover:bg-navy-light"
+              className="mt-2 rounded-sm bg-gold px-4 py-3 text-center text-sm font-semibold uppercase tracking-wider text-onyx transition-colors hover:bg-gold-light"
             >
               View Listings
             </Link>

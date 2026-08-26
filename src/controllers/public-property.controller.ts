@@ -32,6 +32,14 @@ export const PUBLIC_PRICE_BANDS = {
 } as const;
 export type PublicPriceBand = keyof typeof PUBLIC_PRICE_BANDS;
 
+export const PUBLIC_SIZE_BANDS = {
+  'under-50': { min: 0, max: 50 },
+  '50-100': { min: 50, max: 100 },
+  '100-200': { min: 100, max: 200 },
+  '200-plus': { min: 200, max: null },
+} as const;
+export type PublicSizeBand = keyof typeof PUBLIC_SIZE_BANDS;
+
 const PUBLIC_PROPERTY_SELECT = {
   id: true,
   referenceId: true,
@@ -51,6 +59,9 @@ const PUBLIC_PROPERTY_SELECT = {
   completionTime: true,
   paymentPlanStructure: true,
   houseSizeSqft: true,
+  houseSizeSqftMin: true,
+  houseSizeSqftMax: true,
+  developmentName: true,
   amenities: true,
   images: true,
   videos: true,
@@ -99,10 +110,38 @@ const priceBandFilter = (band: PublicPriceBand): Prisma.PropertyWhereInput => {
   return { OR: [flatPriceInBand, rangedPriceInBand] };
 };
 
+// Same overlap logic as priceBandFilter above, but for house_size_sqft --
+// a property with no size data at all never matches any band (there's no
+// "flat" fallback like price=0 to distinguish "unset" from "ranged").
+const sizeBandFilter = (band: PublicSizeBand): Prisma.PropertyWhereInput => {
+  const { min, max } = PUBLIC_SIZE_BANDS[band];
+
+  const flatSizeInBand: Prisma.PropertyWhereInput = {
+    houseSizeSqft: { gt: 0, gte: min, ...(max !== null ? { lte: max } : {}) },
+  };
+
+  const rangeConditions: Prisma.PropertyWhereInput[] = [];
+  if (max !== null) {
+    rangeConditions.push({ OR: [{ houseSizeSqftMin: null }, { houseSizeSqftMin: { lte: max } }] });
+  }
+  if (min > 0) {
+    rangeConditions.push({ OR: [{ houseSizeSqftMax: null }, { houseSizeSqftMax: { gte: min } }] });
+  }
+  const rangedSizeInBand: Prisma.PropertyWhereInput = {
+    houseSizeSqft: null,
+    OR: [{ houseSizeSqftMin: { not: null } }, { houseSizeSqftMax: { not: null } }],
+    AND: rangeConditions,
+  };
+
+  return { OR: [flatSizeInBand, rangedSizeInBand] };
+};
+
 interface PublicListingQuery {
   area?: string;
   type?: string;
   price?: string;
+  size?: string;
+  development?: string;
   sort?: string;
 }
 
@@ -126,6 +165,15 @@ const buildWhere = (query: PublicListingQuery): Prisma.PropertyWhereInput => {
     (where.AND as Prisma.PropertyWhereInput[]).push(priceBandFilter(band));
   }
 
+  const sizeBand = query.size && query.size in PUBLIC_SIZE_BANDS ? (query.size as PublicSizeBand) : undefined;
+  if (sizeBand) {
+    (where.AND as Prisma.PropertyWhereInput[]).push(sizeBandFilter(sizeBand));
+  }
+
+  if (query.development) {
+    (where.AND as Prisma.PropertyWhereInput[]).push({ developmentName: { equals: query.development, mode: 'insensitive' } });
+  }
+
   return where;
 };
 
@@ -134,6 +182,8 @@ export const listPublicProperties = async (req: Request, res: Response): Promise
     area: typeof req.query.area === 'string' ? req.query.area : undefined,
     type: typeof req.query.type === 'string' ? req.query.type : undefined,
     price: typeof req.query.price === 'string' ? req.query.price : undefined,
+    size: typeof req.query.size === 'string' ? req.query.size : undefined,
+    development: typeof req.query.development === 'string' ? req.query.development : undefined,
     sort: typeof req.query.sort === 'string' ? req.query.sort : undefined,
   };
 

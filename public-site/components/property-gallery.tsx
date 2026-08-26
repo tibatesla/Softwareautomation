@@ -51,7 +51,7 @@ export function PropertyGallery({ images, title }: { images: string[]; title: st
               type="button"
               aria-label={`View photo ${i + 1} full screen`}
               onClick={() => setLightboxIndex(i)}
-              className="relative aspect-[4/3] w-full shrink-0 snap-center bg-stone/10"
+              className="relative aspect-[4/3] w-full shrink-0 snap-center bg-onyx-lighter"
             >
               <Image
                 src={url}
@@ -73,7 +73,7 @@ export function PropertyGallery({ images, title }: { images: string[]; title: st
                 type="button"
                 aria-label={`Go to photo ${i + 1}`}
                 onClick={() => goTo(i)}
-                className={`h-2 rounded-full transition-all ${i === active ? "w-6 bg-gold" : "w-2 bg-navy/20"}`}
+                className={`h-2 rounded-full transition-all ${i === active ? "w-6 bg-gold" : "w-2 bg-white/20"}`}
               />
             ))}
           </div>
@@ -86,7 +86,7 @@ export function PropertyGallery({ images, title }: { images: string[]; title: st
           type="button"
           aria-label="View photo 1 full screen"
           onClick={() => setLightboxIndex(0)}
-          className="group relative overflow-hidden rounded-md bg-stone/10 md:col-span-2 md:row-span-2 md:h-full"
+          className="group relative overflow-hidden rounded-md bg-onyx-lighter md:col-span-2 md:row-span-2 md:h-full"
         >
           <Image
             src={images[0]}
@@ -106,7 +106,7 @@ export function PropertyGallery({ images, title }: { images: string[]; title: st
               type="button"
               aria-label={`View photo ${index + 1} full screen`}
               onClick={() => setLightboxIndex(index)}
-              className="group relative overflow-hidden rounded-md bg-stone/10 md:h-full"
+              className="group relative overflow-hidden rounded-md bg-onyx-lighter md:h-full"
             >
               <Image
                 src={url}
@@ -116,7 +116,7 @@ export function PropertyGallery({ images, title }: { images: string[]; title: st
                 className="object-cover transition-transform duration-300 group-hover:scale-105"
               />
               {isLastTile && extraCount > 0 && (
-                <span className="absolute inset-0 flex items-center justify-center bg-navy-dark/60 text-lg font-semibold text-white">
+                <span className="absolute inset-0 flex items-center justify-center bg-onyx/70 text-lg font-semibold text-ivory">
                   +{extraCount} more
                 </span>
               )}

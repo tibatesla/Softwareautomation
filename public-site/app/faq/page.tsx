@@ -59,11 +59,11 @@ const FAQS: { question: string; answer: string }[] = [
 export default function FaqPage() {
   return (
     <div>
-      <section className="border-b border-black/5 bg-navy-dark text-white">
+      <section className="border-b border-white/10 bg-onyx-light">
         <div className="container-page flex flex-col items-center gap-4 py-16 text-center md:py-24">
           <span className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Support</span>
-          <h1 className="font-serif text-3xl font-semibold md:text-5xl">Frequently Asked Questions</h1>
-          <p className="max-w-xl text-sm text-white/70 md:text-base">
+          <h1 className="font-serif text-3xl font-semibold text-ivory md:text-5xl">Frequently Asked Questions</h1>
+          <p className="max-w-xl text-sm text-stone md:text-base">
             Everything you need to know about browsing, enquiring, and reserving a property with Chestone.
           </p>
         </div>
@@ -74,9 +74,9 @@ export default function FaqPage() {
           {FAQS.map((faq) => (
             <details
               key={faq.question}
-              className="group rounded-md border border-black/5 bg-white px-6 py-1 open:pb-5 open:shadow-sm"
+              className="group rounded-md border border-white/10 bg-onyx-light px-6 py-1 open:pb-5"
             >
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 font-serif text-lg font-semibold text-navy marker:content-none">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 font-serif text-lg font-semibold text-ivory marker:content-none">
                 {faq.question}
                 <span className="shrink-0 text-xl font-normal text-gold transition-transform group-open:rotate-45">
                   +
@@ -87,20 +87,20 @@ export default function FaqPage() {
           ))}
         </div>
 
-        <div className="mx-auto mt-14 flex max-w-3xl flex-col items-center gap-4 rounded-md bg-navy px-8 py-10 text-center text-white">
-          <h2 className="font-serif text-2xl font-semibold">Still have questions?</h2>
-          <p className="max-w-md text-sm text-white/70">
+        <div className="mx-auto mt-14 flex max-w-3xl flex-col items-center gap-4 rounded-md border border-white/10 bg-onyx-light px-8 py-10 text-center">
+          <h2 className="font-serif text-2xl font-semibold text-ivory">Still have questions?</h2>
+          <p className="max-w-md text-sm text-stone">
             Chat with a Chestone consultant on WhatsApp — real answers, no automated queue.
           </p>
           <a
             href={whatsappGeneralEnquiryLink()}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-sm bg-gold px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-navy-dark transition-colors hover:bg-gold-light"
+            className="rounded-sm bg-gold px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-onyx transition-colors hover:bg-gold-light"
           >
             Chat on WhatsApp
           </a>
-          <Link href="/properties" className="text-sm text-white/60 underline-offset-4 hover:text-gold hover:underline">
+          <Link href="/properties" className="text-sm text-stone underline-offset-4 hover:text-gold hover:underline">
             Or browse properties →
           </Link>
         </div>

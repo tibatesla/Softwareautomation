@@ -6,6 +6,7 @@ import { Prisma } from '../../generated/prisma';
 import { createPropertySchema, updatePropertySchema, bulkDeleteSchema } from '../schemas/property.schema';
 import { uploadMediaBuffer, deletePropertyMedia, publicIdFromUrl } from '../services/cloudinary.service';
 import { resourceTypeForMimetype } from '../middlewares/upload.middleware';
+import { publishNewListing } from '../services/social-publishing.service';
 
 export const listProperties = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id, role } = req.user!;
@@ -191,13 +192,33 @@ export const uploadPropertyMediaFile = async (req: AuthenticatedRequest, res: Re
     const uploadResult = await uploadMediaBuffer(file.buffer, propertyId, resourceType);
     const field = resourceType === 'image' ? 'images' : 'videos';
 
+    let shouldAutoPost = false;
     const property = await withRLSContext(id, role, async (tx) => {
       const existing = await tx.property.findUniqueOrThrow({ where: { id: propertyId } });
       const updatedList = [...(existing as unknown as Record<string, string[]>)[field], uploadResult.url];
-      return tx.property.update({ where: { id: propertyId }, data: { [field]: updatedList } });
+      // Auto-post fires once, the moment a property gets its first photo --
+      // socialPostedAt is set here regardless of whether the post below
+      // actually succeeds, so it's never retried on a later photo upload.
+      shouldAutoPost = resourceType === 'image' && existing.images.length === 0 && !existing.socialPostedAt;
+      return tx.property.update({
+        where: { id: propertyId },
+        data: { [field]: updatedList, ...(shouldAutoPost ? { socialPostedAt: new Date() } : {}) },
+      });
     });
 
     res.status(201).json(property);
+
+    if (shouldAutoPost) {
+      publishNewListing({
+        id: property.id,
+        title: property.title,
+        location: property.location,
+        subLocation: property.subLocation,
+        price: Number(property.price),
+        currency: property.currency,
+        imageUrl: uploadResult.url,
+      }).catch((error) => console.error('[Property Media] Auto-post to social failed:', error));
+    }
   } catch (error) {
     console.error('[Property Media] Upload failed:', error);
     res.status(404).json({ error: 'Property not found, or upload failed' });

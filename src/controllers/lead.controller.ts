@@ -1,7 +1,8 @@
 // src/controllers/lead.controller.ts
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { withRLSContext, AppRole } from '../config/database';
+import { withRLSContext, withSystemContext, AppRole } from '../config/database';
+import { Prisma } from '../../generated/prisma';
 import { createLeadSchema, updateLeadSchema, sendLeadMessageSchema, bulkDeleteSchema } from '../schemas/lead.schema';
 import { sendWhatsAppText, WhatsAppSendError, WHATSAPP_REENGAGEMENT_WINDOW_CLOSED_CODE } from '../services/whatsapp-cloud-api.service';
 
@@ -194,7 +195,7 @@ export const updateLead = async (req: AuthenticatedRequest, res: Response): Prom
   }
 };
 
-type DeleteLeadResult = { ok: true } | { ok: false; status: 404 | 409; error: string };
+type DeleteLeadResult = { ok: true } | { ok: false; status: 404 | 409 | 500; error: string };
 
 /**
  * Shared by the single-item and bulk delete endpoints. Blocked if the lead
@@ -228,6 +229,11 @@ const deleteLeadCore = async (userId: string, role: AppRole, leadId: string): Pr
       };
     }
 
+    // Read-markers can belong to several different users, not just the
+    // caller -- clearing them needs system privileges, not the caller's own
+    // scoped RLS context (see 034_lead_reads_delete.sql).
+    await withSystemContext((tx) => tx.leadRead.deleteMany({ where: { leadId } }));
+
     await withRLSContext(userId, role, async (tx) => {
       await tx.leadMessage.deleteMany({ where: { leadId } });
       await tx.agentPenalty.updateMany({ where: { leadId }, data: { leadId: null } });
@@ -235,8 +241,12 @@ const deleteLeadCore = async (userId: string, role: AppRole, leadId: string): Pr
     });
 
     return { ok: true };
-  } catch {
-    return { ok: false, status: 404, error: 'Lead not found' };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return { ok: false, status: 404, error: 'Lead not found' };
+    }
+    console.error('[Lead] Delete failed:', error);
+    return { ok: false, status: 500, error: 'Failed to delete lead' };
   }
 };
 

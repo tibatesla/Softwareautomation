@@ -5,7 +5,17 @@ import type { Property } from "@/lib/types";
 export type CreatePropertyPayload = Partial<
   Omit<
     Property,
-    "id" | "createdAt" | "updatedAt" | "createdBy" | "price" | "priceMin" | "priceMax" | "houseSizeSqft" | "amenities"
+    | "id"
+    | "createdAt"
+    | "updatedAt"
+    | "createdBy"
+    | "price"
+    | "priceMin"
+    | "priceMax"
+    | "houseSizeSqft"
+    | "houseSizeSqftMin"
+    | "houseSizeSqftMax"
+    | "amenities"
   >
 > & {
   title: string;
@@ -13,6 +23,8 @@ export type CreatePropertyPayload = Partial<
   priceMin?: number;
   priceMax?: number;
   houseSizeSqft?: number;
+  houseSizeSqftMin?: number;
+  houseSizeSqftMax?: number;
   amenities?: string[];
 };
 

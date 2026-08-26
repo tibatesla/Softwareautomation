@@ -36,7 +36,7 @@ export function GalleryLightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-navy-dark/97 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex flex-col bg-onyx/97 backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

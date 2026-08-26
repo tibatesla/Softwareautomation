@@ -16,6 +16,13 @@ export function formatPriceRange(min: string | null, max: string | null, currenc
   return fmt(min || max!);
 }
 
+export function formatSizeRange(min: string | null, max: string | null, single: string | null): string | null {
+  if (min && max) return `${Number(min).toLocaleString()} – ${Number(max).toLocaleString()} sqm`;
+  if (min || max) return `${Number(min || max).toLocaleString()} sqm`;
+  if (single) return `${Number(single).toLocaleString()} sqm`;
+  return null;
+}
+
 /** Builds a prefilled wa.me link so an "Enquire" click on the public site
  * flows straight into the existing WhatsApp qualification bot. */
 export function whatsappEnquiryLink(propertyTitle: string): string {

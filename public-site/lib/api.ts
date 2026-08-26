@@ -15,6 +15,8 @@ export interface PropertyFilters {
   area?: string;
   type?: string;
   price?: string;
+  size?: string;
+  development?: string;
   sort?: string;
 }
 
@@ -23,6 +25,8 @@ export async function getProperties(filters: PropertyFilters = {}): Promise<Publ
   if (filters.area) url.searchParams.set("area", filters.area);
   if (filters.type) url.searchParams.set("type", filters.type);
   if (filters.price) url.searchParams.set("price", filters.price);
+  if (filters.size) url.searchParams.set("size", filters.size);
+  if (filters.development) url.searchParams.set("development", filters.development);
   if (filters.sort) url.searchParams.set("sort", filters.sort);
 
   const response = await fetch(url, { next: { revalidate: REVALIDATE_SECONDS } });
@@ -41,4 +45,41 @@ export async function getProperty(id: string): Promise<PublicProperty | null> {
     throw new Error(`Failed to load property (${response.status})`);
   }
   return response.json();
+}
+
+export interface BookingSlot {
+  id: string;
+  label: string;
+}
+
+export interface BookingOptions {
+  propertyTitle: string | null;
+  agentName: string | null;
+  isVirtual: boolean;
+  slots: BookingSlot[];
+}
+
+// Never cached -- a booking link is single-use and time-sensitive (its
+// slots reflect the agent's calendar at this exact moment), unlike a
+// property listing which is fine to serve slightly stale for a minute.
+export async function getBookingOptions(token: string): Promise<BookingOptions | null> {
+  const response = await fetch(`${API_BASE_URL}/bookings/${token}`, { cache: "no-store" });
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`Failed to load booking options (${response.status})`);
+  }
+  return response.json();
+}
+
+export async function confirmBooking(token: string, slotId: string): Promise<{ whenLabel: string }> {
+  const response = await fetch(`${API_BASE_URL}/bookings/${token}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slotId }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `Failed to confirm booking (${response.status})`);
+  }
+  return data;
 }

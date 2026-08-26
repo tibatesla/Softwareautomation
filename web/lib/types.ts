@@ -116,7 +116,7 @@ export interface Lead {
   purchaseTimeline: string | null;
   targetSegment: LeadSegment | null;
   countryCode: string | null;
-  requiresProxyVisit: boolean;
+  requiresProxyVisit: boolean | null;
   proxyPhoneNumber: string | null;
   isOvernightDiaspora: boolean;
   fbclid: string | null;
@@ -136,6 +136,22 @@ export interface Lead {
   // Not a DB column -- computed per-request in listLeads, scoped to the
   // calling user's own read state (see lead_reads / migration 030).
   unreadCount: number;
+}
+
+export interface AgentPerformance {
+  id: string;
+  fullName: string;
+  email: string;
+  isActive: boolean;
+  isOnDuty: boolean;
+  leadsClaimed: number;
+  leadsQualified: number;
+  leadsConverted: number;
+  bookingsScheduled: number;
+  bookingsCompleted: number;
+  bookingsMissed: number;
+  slaViolations: number;
+  revenueClosed: number;
 }
 
 export type MessageDirection = "inbound" | "outbound";
@@ -178,6 +194,9 @@ export interface Property {
   view: string | null;
   paymentPlanStructure: string | null;
   houseSizeSqft: string | null;
+  houseSizeSqftMin: string | null;
+  houseSizeSqftMax: string | null;
+  developmentName: string | null;
   amenities: PropertyAmenity[];
   subLocation: string | null;
   images: string[];
