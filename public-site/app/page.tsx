@@ -11,6 +11,7 @@ const AREA_TAGLINES: Record<string, string> = {
   Lavington: "Established, tree-lined streets and executive homes",
   Karen: "Spacious villas and estates on Nairobi's green outskirts",
   Riverside: "Premium riverfront apartments near the diplomatic district",
+  Runda: "Gated luxury estates amid Nairobi's forested northern suburbs",
 };
 
 export default async function HomePage() {
@@ -21,8 +22,9 @@ export default async function HomePage() {
     <div>
       {/* Hero */}
       <section className="relative overflow-hidden bg-onyx text-ivory">
-        <div className="pointer-events-none absolute -right-24 -top-24 size-[28rem] rounded-full bg-gold/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 -left-16 size-[26rem] rounded-full bg-gold/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 -top-24 size-[28rem] rounded-full bg-gold/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -left-16 size-[26rem] rounded-full bg-gold/12 blur-3xl" />
+        <div className="pointer-events-none absolute left-1/2 top-1/3 size-[24rem] -translate-x-1/2 rounded-full bg-gold-light/8 blur-3xl" />
 
         <div className="container-page relative flex flex-col items-center gap-8 py-20 text-center md:py-36">
           <Image src="/logo-mark.jpg" alt="Chestone Properties" width={72} height={72} className="rounded-lg" priority />
@@ -31,19 +33,19 @@ export default async function HomePage() {
             <span className="text-gold">Nairobi&apos;s</span> Finest Neighborhoods
           </h1>
           <p className="max-w-xl text-base text-stone md:text-lg">
-            Curated homes and apartments in Kilimani, Kileleshwa, Westlands, Lavington, Karen, and
-            Riverside Drive — every listing verified, every enquiry handled by a dedicated consultant.
+            Curated homes and apartments in Kilimani, Kileleshwa, Westlands, Lavington, Karen,
+            Riverside Drive, and Runda — every listing verified, every enquiry handled by a dedicated consultant.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/properties"
-              className="rounded-sm bg-gold px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-onyx transition-colors hover:bg-gold-light"
+              className="btn-gold rounded-full px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-ivory"
             >
               Browse Properties
             </Link>
             <Link
               href="/#contact"
-              className="rounded-sm border border-white/20 px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-ivory transition-colors hover:border-gold hover:text-gold"
+              className="rounded-full border border-white/50 bg-white/30 px-8 py-3.5 backdrop-blur-md text-sm font-semibold uppercase tracking-wider text-ivory transition-all hover:border-gold hover:text-gold hover:shadow-[0_0_24px_-6px_rgba(184,134,63,0.45)]"
             >
               Get in Touch
             </Link>
@@ -64,10 +66,10 @@ export default async function HomePage() {
             <Link
               key={area}
               href={`/properties?area=${encodeURIComponent(area)}`}
-              className="group relative flex flex-col justify-end overflow-hidden rounded-md border border-white/10 bg-onyx-light p-8 text-ivory transition-all hover:-translate-y-1 hover:border-gold/40"
+              className="card-shine group relative flex flex-col justify-end overflow-hidden rounded-3xl border border-white/50 p-8 text-ivory transition-all hover:-translate-y-1 hover:border-gold/40"
               style={{ minHeight: "180px" }}
             >
-              <div className="absolute inset-0 bg-gradient-to-t from-onyx via-onyx/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+              <div className="absolute inset-0 bg-gradient-to-t from-gold/10 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
               <div className="relative">
                 <h3 className="font-serif text-2xl font-semibold">{area}</h3>
                 <p className="mt-1 text-sm text-stone">{AREA_TAGLINES[area]}</p>
@@ -113,7 +115,7 @@ export default async function HomePage() {
             },
             {
               title: "Dedicated Consultants",
-              body: "Every enquiry is handled by a real Chestone consultant who knows the property and the process.",
+              body: "Every enquiry is handled by a Chestone consultant who knows the property and the process.",
             },
             {
               title: "Transparent Pricing",

@@ -4,7 +4,7 @@ import { use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { Trash2, Star } from "lucide-react";
 import { useDeleteProperty, useProperty } from "@/lib/queries/properties";
 import { useUsers } from "@/lib/queries/users";
 import { useAuthUser } from "@/components/layout/auth-context";
@@ -139,11 +139,20 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-medium">Amenities</h2>
           <div className="flex flex-wrap gap-2">
-            {property.amenities.map((amenity) => (
-              <Badge key={amenity} variant="purple">
-                {amenity}
-              </Badge>
-            ))}
+            {[...property.amenities]
+              .sort((a, b) => Number(property.outstandingAmenities.includes(b)) - Number(property.outstandingAmenities.includes(a)))
+              .map((amenity) =>
+                property.outstandingAmenities.includes(amenity) ? (
+                  <Badge key={amenity} variant="warning">
+                    <Star className="size-3 fill-current" />
+                    {amenity}
+                  </Badge>
+                ) : (
+                  <Badge key={amenity} variant="purple">
+                    {amenity}
+                  </Badge>
+                ),
+              )}
           </div>
         </section>
       )}

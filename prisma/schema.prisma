@@ -62,6 +62,7 @@ model Property {
   houseSizeSqftMax     Decimal?       @map("house_size_sqft_max") @db.Decimal(10, 2)
   developmentName      String?        @map("development_name")
   amenities            String[]       @default([])
+  outstandingAmenities String[]       @default([]) @map("outstanding_amenities")
   subLocation          String?        @map("sub_location")
   images               String[]       @default([])
   videos               String[]       @default([])
@@ -165,7 +166,7 @@ model Payment {
 
 model Booking {
   id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  propertyId  String        @map("property_id") @db.Uuid
+  propertyId  String?       @map("property_id") @db.Uuid
   leadId      String?       @map("lead_id") @db.Uuid
   agentId     String        @map("agent_id") @db.Uuid
   scheduledAt DateTime      @map("scheduled_at") @db.Timestamptz(6)
@@ -176,7 +177,7 @@ model Booking {
   updatedAt   DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
   agent       User          @relation(fields: [agentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   lead        Lead?         @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  property    Property      @relation(fields: [propertyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  property    Property?     @relation(fields: [propertyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([agentId, scheduledAt], map: "idx_bookings_agent_schedule")
   @@index([propertyId], map: "idx_bookings_property")

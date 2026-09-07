@@ -4,10 +4,10 @@ import { Fragment, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Building2, CheckCircle2, Clock, Ban, Trash2, ChevronRight, ChevronDown } from "lucide-react";
-import { useBulkDeleteProperties, useProperties } from "@/lib/queries/properties";
+import { Building2, CheckCircle2, Clock, Ban, Trash2, ChevronRight, ChevronDown, Share2 } from "lucide-react";
+import { useBulkDeleteProperties, useProperties, usePostPropertyToSocial } from "@/lib/queries/properties";
 import { useAuthUser } from "@/components/layout/auth-context";
-import { hasRole, type Property } from "@/lib/types";
+import { hasRole } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,26 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PROPERTY_STATUS_COLOR } from "@/lib/status-colors";
 import { PROPERTY_AREA_VALUES } from "@/lib/property-constants";
 import { formatCurrency, cn } from "@/lib/utils";
-
-/** Properties sharing a development name are grouped into one collapsible
- * row; everything else lists individually, same as before. Order is
- * preserved -- a group's header appears at the position of its first
- * member, not resorted to the top or bottom. */
-function groupByDevelopment(properties: Property[]): (Property | { development: string; units: Property[] })[] {
-  const seen = new Set<string>();
-  const rows: (Property | { development: string; units: Property[] })[] = [];
-  for (const property of properties) {
-    const key = property.developmentName?.trim();
-    if (!key) {
-      rows.push(property);
-      continue;
-    }
-    if (seen.has(key)) continue;
-    seen.add(key);
-    rows.push({ development: key, units: properties.filter((p) => p.developmentName?.trim() === key) });
-  }
-  return rows;
-}
+import { groupByDevelopment, countPropertyListings } from "@/lib/property-grouping";
 
 export default function PropertiesPage() {
   const router = useRouter();
@@ -46,6 +27,8 @@ export default function PropertiesPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const bulkDelete = useBulkDeleteProperties();
+  const postToSocial = usePostPropertyToSocial();
+  const [postingId, setPostingId] = useState<string | null>(null);
 
   const toggleGroup = (development: string) => {
     setExpandedGroups((prev) => {
@@ -100,6 +83,46 @@ export default function PropertiesPage() {
     }
   };
 
+  const handlePostToSocial = async (id: string, label: string) => {
+    if (!window.confirm(`Post "${label}" to Facebook and Instagram now?`)) return;
+    setPostingId(id);
+    try {
+      const { result, unitsIncluded } = await postToSocial.mutateAsync(id);
+      const platforms = [result.facebook === "posted" && "Facebook", result.instagram === "posted" && "Instagram"].filter(Boolean);
+      if (platforms.length > 0) {
+        toast.success(`Posted "${label}" (${unitsIncluded} unit${unitsIncluded === 1 ? "" : "s"}) to ${platforms.join(" & ")}`);
+      } else {
+        toast.error(`Post to social media failed for "${label}" -- check the Meta credentials are still valid.`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to post to social media");
+    } finally {
+      setPostingId(null);
+    }
+  };
+
+  const renderSocialCell = (postedAt: string | null, id: string, label: string) => (
+    <TableCell onClick={(e) => e.stopPropagation()}>
+      {postedAt ? (
+        <Badge variant="success" title={`Posted ${new Date(postedAt).toLocaleDateString()}`}>
+          <CheckCircle2 className="size-3" />
+          Posted
+        </Badge>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => handlePostToSocial(id, label)}
+          disabled={postingId === id}
+        >
+          <Share2 className="size-3.5" />
+          {postingId === id ? "Posting..." : "Post to Social"}
+        </Button>
+      )}
+    </TableCell>
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -116,7 +139,7 @@ export default function PropertiesPage() {
 
       {properties && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatCard label="Total" value={properties.length} icon={Building2} color="primary" />
+          <StatCard label="Total" value={countPropertyListings(properties)} icon={Building2} color="primary" />
           <StatCard
             label="Available"
             value={properties.filter((p) => p.status === "available").length}
@@ -214,6 +237,7 @@ export default function PropertiesPage() {
                 <TableHead>Location</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Status</TableHead>
+                {canManage && <TableHead>Social</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -241,6 +265,7 @@ export default function PropertiesPage() {
                       <TableCell>
                         <Badge variant={PROPERTY_STATUS_COLOR[property.status]}>{property.status.replace("_", " ")}</Badge>
                       </TableCell>
+                      {canManage && renderSocialCell(property.socialPostedAt, property.id, property.title)}
                     </TableRow>
                   );
                 }
@@ -253,6 +278,7 @@ export default function PropertiesPage() {
                 const statuses = new Set(units.map((u) => u.status));
                 const location = units[0]?.location;
                 const sameLocation = units.every((u) => u.location === location);
+                const groupPostedAt = units.find((u) => u.socialPostedAt)?.socialPostedAt ?? null;
 
                 return (
                   <Fragment key={development}>
@@ -283,6 +309,7 @@ export default function PropertiesPage() {
                           <Badge variant="outline">Mixed</Badge>
                         )}
                       </TableCell>
+                      {canManage && renderSocialCell(groupPostedAt, units[0].id, development)}
                     </TableRow>
                     {expanded &&
                       units.map((property) => (
@@ -306,6 +333,7 @@ export default function PropertiesPage() {
                           <TableCell>
                             <Badge variant={PROPERTY_STATUS_COLOR[property.status]}>{property.status.replace("_", " ")}</Badge>
                           </TableCell>
+                          {canManage && <TableCell />}
                         </TableRow>
                       ))}
                   </Fragment>
@@ -313,7 +341,7 @@ export default function PropertiesPage() {
               })}
               {visibleProperties.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 5 : 4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={canManage ? 6 : 4} className="text-center text-muted-foreground">
                     {areaFilter ? "No properties in this area." : "No properties yet."}
                   </TableCell>
                 </TableRow>

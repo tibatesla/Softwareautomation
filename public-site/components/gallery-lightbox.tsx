@@ -36,7 +36,10 @@ export function GalleryLightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-onyx/97 backdrop-blur-sm"
+      // Deliberately hardcoded dark, not the `onyx` token -- a full-screen
+      // photo viewer stays dark for photo legibility regardless of the
+      // site's own light/dark theme (same convention as Photos apps).
+      className="fixed inset-0 z-[100] flex flex-col bg-neutral-950/97 backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

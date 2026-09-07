@@ -19,5 +19,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticRoutes, ...propertyRoutes];
+  const developments = [...new Set(properties.map((p) => p.developmentName).filter((d): d is string => Boolean(d)))];
+  const developmentRoutes: MetadataRoute.Sitemap = developments.map((name) => ({
+    url: `${SITE_URL}/developments/${encodeURIComponent(name)}`,
+    changeFrequency: "weekly",
+    priority: 0.8,
+  }));
+
+  return [...staticRoutes, ...developmentRoutes, ...propertyRoutes];
 }

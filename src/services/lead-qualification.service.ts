@@ -368,32 +368,35 @@ export const handleInboundWhatsAppMessage = async (message: NormalizedInboundMes
       // Lock in the agent now (not when the client picks a slot) so the
       // slot list itself can be filtered against that specific agent's
       // calendar -- see pickAgentForBooking for why this doesn't disturb
-      // an already-claimed lead.
+      // an already-claimed lead. Deliberately not gated on lead.propertyId
+      // -- most real opening messages are generic greetings that never
+      // name a listing, so requiring a match here meant almost nobody ever
+      // saw a booking offer. An unmatched lead still gets one, just for a
+      // general consultation instead of a specific property (see
+      // confirmLeadBooking).
       let slotOffer: { bodyText: string; slots: WhatsAppSlotOption[]; transcriptBody: string } | null = null;
       let bookingLink: string | null = null;
-      if (lead.propertyId) {
-        const agentId = await pickAgentForBooking(tx, { id: lead.id, claimedByAgentId: lead.claimedByAgentId });
-        if (agentId) {
-          const isVirtual = lead.visitPreference === 'virtual';
-          const slots = await generateAvailableSlots(tx, agentId, 8);
-          if (slots.length > 0) {
-            updateData.awaitingBookingReply = true;
-            slotOffer = {
-              bodyText: CLOSING_WITH_BOOKING_OFFER,
-              slots: slots.map((slot) => ({
-                id: slot.start.toISOString(),
-                title: slot.label,
-                description: isVirtual ? 'Virtual tour' : 'Physical visit',
-              })),
-              transcriptBody: `[Offered visit times: ${slots.map((slot) => slot.label).join(', ')}]`,
-            };
-            // Sent alongside the tap buttons, not instead of them (see
-            // CLOSING_WITH_BOOKING_OFFER) -- the same slots the buttons
-            // offer are also bookable through this link.
-            const token = randomBytes(24).toString('hex');
-            updateData.bookingToken = token;
-            bookingLink = `${PUBLIC_SITE_URL}/book/${token}`;
-          }
+      const agentId = await pickAgentForBooking(tx, { id: lead.id, claimedByAgentId: lead.claimedByAgentId });
+      if (agentId) {
+        const isVirtual = lead.visitPreference === 'virtual';
+        const slots = await generateAvailableSlots(tx, agentId, 8);
+        if (slots.length > 0) {
+          updateData.awaitingBookingReply = true;
+          slotOffer = {
+            bodyText: CLOSING_WITH_BOOKING_OFFER,
+            slots: slots.map((slot) => ({
+              id: slot.start.toISOString(),
+              title: slot.label,
+              description: isVirtual ? 'Virtual tour' : 'Physical visit',
+            })),
+            transcriptBody: `[Offered visit times: ${slots.map((slot) => slot.label).join(', ')}]`,
+          };
+          // Sent alongside the tap buttons, not instead of them (see
+          // CLOSING_WITH_BOOKING_OFFER) -- the same slots the buttons
+          // offer are also bookable through this link.
+          const token = randomBytes(24).toString('hex');
+          updateData.bookingToken = token;
+          bookingLink = `${PUBLIC_SITE_URL}/book/${token}`;
         }
       }
 

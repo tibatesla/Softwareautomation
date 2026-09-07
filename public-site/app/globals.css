@@ -13,16 +13,19 @@
 }
 
 :root {
-  /* Warm near-black, luxury-real-estate palette -- three depths of the
-     same dark hue rather than flat black, so cards/panels read as raised
-     surfaces against the page instead of just a lighter grey box. */
-  --onyx: #0f0c08;
-  --onyx-light: #1a140d;
-  --onyx-lighter: #2b2318;
-  --gold: #c9a15c;
-  --gold-light: #e3c489;
-  --ivory: #f4efe6;
-  --stone: #a89d8c;
+  /* Warm off-white, luxury-real-estate palette -- three depths of the same
+     warm neutral rather than flat white, so cards/panels read as raised
+     surfaces against the page instead of just a plain box. Variable names
+     kept from the earlier dark theme (onyx = page/panel surface, ivory =
+     primary text) to avoid touching every component's class names -- only
+     what these resolve to changed. */
+  --onyx: #faf8f4;
+  --onyx-light: #f1ebe0;
+  --onyx-lighter: #e6dcc9;
+  --gold: #b8863f;
+  --gold-light: #d1a565;
+  --ivory: #241f16;
+  --stone: #6f6656;
 }
 
 * {
@@ -37,6 +40,24 @@ body {
   background: var(--onyx);
   color: var(--ivory);
   font-family: var(--font-sans);
+  position: relative;
+}
+
+/* Ambient colour field that every glass panel floats over and refracts --
+   without something varied behind it, a blurred translucent panel just
+   looks like a plain grey box. Fixed so it stays put as the page scrolls,
+   sitting behind all real content. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(38rem 30rem at 8% 4%, rgba(184, 134, 63, 0.22), transparent 60%),
+    radial-gradient(34rem 28rem at 92% 18%, rgba(150, 190, 220, 0.16), transparent 60%),
+    radial-gradient(30rem 26rem at 18% 78%, rgba(230, 160, 130, 0.14), transparent 60%),
+    radial-gradient(36rem 30rem at 85% 92%, rgba(209, 165, 101, 0.18), transparent 60%),
+    var(--onyx);
 }
 
 h1, h2, h3, h4, .font-display {
@@ -45,7 +66,7 @@ h1, h2, h3, h4, .font-display {
 
 ::selection {
   background: var(--gold);
-  color: var(--onyx);
+  color: var(--ivory);
 }
 
 /* Subtle gold underline accent, used under section headings */
@@ -54,6 +75,73 @@ h1, h2, h3, h4, .font-display {
   height: 3px;
   background: linear-gradient(90deg, var(--gold), var(--gold-light));
   border-radius: 2px;
+}
+
+/* Liquid-glass CTA -- a glossy gold dome rather than a flat fill: a bright
+   specular highlight arcs across the top like light hitting curved glass,
+   the gradient body gives it depth, and the sweep on hover is the same
+   glass-catching-light motion iOS controls use. */
+.btn-gold {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--gold-light) 0%, var(--gold) 55%, #96682d 100%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6), inset 0 -6px 10px -6px rgba(96, 66, 24, 0.5),
+    0 6px 18px -6px rgba(184, 134, 63, 0.55);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.btn-gold::after {
+  content: "";
+  position: absolute;
+  inset: 1px 1px auto 1px;
+  height: 42%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+.btn-gold:hover {
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.7), inset 0 -6px 10px -6px rgba(96, 66, 24, 0.5),
+    0 10px 24px -6px rgba(184, 134, 63, 0.65);
+  transform: translateY(-1px);
+}
+.btn-gold::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.45) 48%, transparent 66%);
+  transform: translateX(-120%);
+  transition: transform 0.7s ease;
+}
+.btn-gold:hover::before {
+  transform: translateX(120%);
+}
+
+/* Frosted-glass panel -- the flagship "liquid glass" surface: translucent
+   with a heavy blur+saturate so the ambient colour field behind it shows
+   through softened, a bright inset edge along the top standing in for a
+   specular highlight catching light on curved glass, and a soft shadow so
+   it still reads as raised rather than just see-through. */
+.card-shine {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(36, 31, 22, 0.05),
+    0 8px 24px -10px rgba(36, 31, 22, 0.18);
+  transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+}
+.card-shine:hover {
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 1px 2px rgba(36, 31, 22, 0.05),
+    0 16px 36px -12px rgba(36, 31, 22, 0.22), 0 0 0 1px rgba(184, 134, 63, 0.3), 0 0 24px -6px rgba(184, 134, 63, 0.3);
+}
+
+/* Glass treatment for the header/nav bar and other bars that sit flush
+   against the viewport edge (no rounded corners, no hover state). This one
+   needs a much stronger blur+opacity than the floating cards -- it's
+   `position: sticky`, so scrolled content passes directly behind it, and a
+   light touch here left bold hero text legible right through the nav
+   instead of dissolving into soft colour like real glass would. */
+.glass-bar {
+  background: rgba(253, 252, 249, 0.96);
+  backdrop-filter: blur(28px) saturate(160%);
 }
 
 .container-page {
@@ -76,4 +164,18 @@ h1, h2, h3, h4, .font-display {
 }
 .scroll-pills::-webkit-scrollbar {
   display: none;
+}
+
+/* Soft pulsing glow ring behind the floating WhatsApp button, so it reads
+   as alive rather than a flat static icon. */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(37, 211, 102, 0);
+  }
+}
+.pulse-glow {
+  animation: pulse-ring 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

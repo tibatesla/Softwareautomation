@@ -44,7 +44,7 @@ export function PropertyGallery({ images, title }: { images: string[]; title: st
     <>
       {/* Mobile: swipeable slider, tap a photo to open the full-screen viewer */}
       <div className="mt-8 md:hidden">
-        <div ref={trackRef} className="scroll-pills flex snap-x snap-mandatory overflow-x-auto rounded-md">
+        <div ref={trackRef} className="scroll-pills flex snap-x snap-mandatory overflow-x-auto rounded-2xl">
           {images.map((url, i) => (
             <button
               key={`${url}-${i}`}
@@ -73,7 +73,7 @@ export function PropertyGallery({ images, title }: { images: string[]; title: st
                 type="button"
                 aria-label={`Go to photo ${i + 1}`}
                 onClick={() => goTo(i)}
-                className={`h-2 rounded-full transition-all ${i === active ? "w-6 bg-gold" : "w-2 bg-white/20"}`}
+                className={`h-2 rounded-full transition-all ${i === active ? "w-6 bg-gold" : "w-2 bg-black/15"}`}
               />
             ))}
           </div>
@@ -86,7 +86,7 @@ export function PropertyGallery({ images, title }: { images: string[]; title: st
           type="button"
           aria-label="View photo 1 full screen"
           onClick={() => setLightboxIndex(0)}
-          className="group relative overflow-hidden rounded-md bg-onyx-lighter md:col-span-2 md:row-span-2 md:h-full"
+          className="group relative overflow-hidden rounded-2xl bg-onyx-lighter md:col-span-2 md:row-span-2 md:h-full"
         >
           <Image
             src={images[0]}
@@ -106,7 +106,7 @@ export function PropertyGallery({ images, title }: { images: string[]; title: st
               type="button"
               aria-label={`View photo ${index + 1} full screen`}
               onClick={() => setLightboxIndex(index)}
-              className="group relative overflow-hidden rounded-md bg-onyx-lighter md:h-full"
+              className="group relative overflow-hidden rounded-2xl bg-onyx-lighter md:h-full"
             >
               <Image
                 src={url}

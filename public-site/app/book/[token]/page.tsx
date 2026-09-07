@@ -30,7 +30,7 @@ export default async function BookingPage({ params }: { params: Promise<{ token:
 
       <div className="mt-8">
         {options.slots.length > 0 ? (
-          <BookingSlotPicker token={token} slots={options.slots} />
+          <BookingSlotPicker token={token} slots={options.slots} currentName={options.currentName} />
         ) : (
           <p className="text-sm text-stone">
             No open times right now -- please message us on WhatsApp and we&apos;ll coordinate a time directly.

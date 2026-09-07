@@ -9,6 +9,7 @@ export const PROPERTY_AREA_VALUES = [
   "Lavington, Nairobi",
   "Karen, Nairobi",
   "Riverside, Nairobi",
+  "Runda, Nairobi",
 ] as const;
 
 export const PROPERTY_AMENITY_VALUES = [

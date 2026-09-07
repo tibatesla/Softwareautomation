@@ -36,14 +36,14 @@ const SOCIAL_LINKS = [
 
 export function SiteFooter() {
   return (
-    <footer id="contact" className="border-t border-white/10 bg-onyx-light text-white/80">
+    <footer id="contact" className="border-t border-black/10 bg-onyx-light text-ivory/80">
       <div className="container-page grid gap-12 py-16 md:grid-cols-4">
         <div className="md:col-span-2">
           <div className="flex items-center gap-3">
-            <Image src="/logo-mark.jpg" alt="Chestone Properties" width={40} height={40} className="rounded-md" />
-            <span className="font-serif text-lg font-semibold text-white">Chestone Properties Ltd</span>
+            <Image src="/logo-mark.jpg" alt="Chestone Properties" width={40} height={40} className="rounded-xl" />
+            <span className="font-serif text-lg font-semibold text-ivory">Chestone Properties Ltd</span>
           </div>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/60">
+          <p className="mt-4 max-w-sm text-sm leading-relaxed text-stone">
             Structured property solutions across Nairobi&apos;s most sought-after neighborhoods — curated
             listings, transparent pricing, and a dedicated consultant for every enquiry.
           </p>
@@ -56,7 +56,7 @@ export function SiteFooter() {
               <li key={area}>
                 <Link
                   href={`/properties?area=${encodeURIComponent(area)}`}
-                  className="text-sm text-white/70 transition-colors hover:text-gold"
+                  className="text-sm text-stone transition-colors hover:text-gold"
                 >
                   {area}
                 </Link>
@@ -67,7 +67,7 @@ export function SiteFooter() {
 
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-gold">Get in Touch</h3>
-          <ul className="mt-4 flex flex-col gap-3 text-sm text-white/70">
+          <ul className="mt-4 flex flex-col gap-3 text-sm text-stone">
             <li>
               <a
                 href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "254726111133"}`}
@@ -102,7 +102,7 @@ export function SiteFooter() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={social.name}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 transition-colors hover:bg-gold hover:text-onyx"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/5 text-stone transition-colors hover:bg-gold hover:text-ivory"
               >
                 {social.icon}
               </a>
@@ -111,8 +111,8 @@ export function SiteFooter() {
         </div>
       </div>
 
-      <div className="border-t border-white/10">
-        <div className="container-page flex flex-col items-center justify-between gap-2 py-6 text-xs text-white/40 md:flex-row">
+      <div className="border-t border-black/10">
+        <div className="container-page flex flex-col items-center justify-between gap-2 py-6 text-xs text-stone/70 md:flex-row">
           <span>© {new Date().getFullYear()} Chestone Properties Ltd. All rights reserved.</span>
           <span>Structured Property Solutions</span>
         </div>

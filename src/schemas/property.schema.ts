@@ -18,12 +18,14 @@ export const propertyAreaValues = [
   'Lavington, Nairobi',
   'Karen, Nairobi',
   'Riverside, Nairobi',
+  'Runda, Nairobi',
 ] as const;
 
-// Fixed amenity checklist (client-provided list, 37 items). Enforced at the
-// API boundary via zod rather than as a Postgres enum column, so adding a
-// new amenity later is a one-line change here instead of a migration --
-// the DB column stays a plain text[].
+// Suggested amenities (client-provided starter list) -- offered in the CRM
+// as one-click quick-add chips, but no longer the only allowed values.
+// `amenities` itself now accepts free text (see amenitiesArraySchema below)
+// so an agent can add anything not on this list; this array remains purely
+// for UI convenience, not API validation.
 export const propertyAmenityValues = [
   '24/7 Manned Security',
   'CCTV Surveillance',
@@ -64,6 +66,10 @@ export const propertyAmenityValues = [
   'Wine Cellar',
 ] as const;
 
+// Free-text amenity entries -- length-capped per entry and in count purely
+// as an abuse/mistake guard, not a content restriction.
+const amenitiesArraySchema = z.array(z.string().trim().min(1).max(60)).max(60);
+
 export const createPropertySchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
@@ -90,7 +96,13 @@ export const createPropertySchema = z.object({
   houseSizeSqftMin: z.number().nonnegative().optional(),
   houseSizeSqftMax: z.number().nonnegative().optional(),
   developmentName: z.string().optional(),
-  amenities: z.array(z.enum(propertyAmenityValues)).optional(),
+  amenities: amenitiesArraySchema.optional(),
+  // A highlighted subset of `amenities`, shown distinguished from the rest
+  // on the listing (client asked for a way to call out "Outstanding"
+  // amenities). Not enforced as a strict subset here -- a partial PATCH may
+  // send one without the other -- so the controller reconciles it against
+  // the final `amenities` list whenever both are present in the same request.
+  outstandingAmenities: amenitiesArraySchema.optional(),
   subLocation: z.string().optional(),
   images: z.array(z.string().url()).optional(), // any number, from any CDN (Cloudinary or otherwise)
   videos: z.array(z.string().url()).optional(), // any number, from any CDN (Cloudinary or otherwise)

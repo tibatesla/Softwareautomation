@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { CurrencyToggle } from "./currency-toggle";
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -21,7 +22,7 @@ export function MobileNav() {
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-10 w-10 items-center justify-center rounded-sm text-ivory"
+        className="flex h-10 w-10 items-center justify-center rounded-full text-ivory"
       >
         {open ? (
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -38,22 +39,26 @@ export function MobileNav() {
       </button>
 
       {open && (
-        <div className="fixed inset-x-0 top-20 z-40 border-b border-white/10 bg-onyx shadow-lg">
+        <div className="glass-bar fixed inset-x-0 top-20 z-40 border-b border-white/40 shadow-lg">
           <nav className="container-page flex flex-col gap-1 py-4">
             {LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="rounded-sm px-2 py-3 text-base font-medium text-stone transition-colors hover:bg-white/5 hover:text-ivory"
+                className="rounded-xl px-2 py-3 text-base font-medium text-stone transition-colors hover:bg-black/5 hover:text-ivory"
               >
                 {link.label}
               </Link>
             ))}
+            <div className="mt-2 flex items-center justify-between px-2">
+              <span className="text-sm font-medium text-stone">Currency</span>
+              <CurrencyToggle />
+            </div>
             <Link
               href="/properties"
               onClick={() => setOpen(false)}
-              className="mt-2 rounded-sm bg-gold px-4 py-3 text-center text-sm font-semibold uppercase tracking-wider text-onyx transition-colors hover:bg-gold-light"
+              className="btn-gold mt-2 rounded-full px-4 py-3 text-center text-sm font-semibold uppercase tracking-wider text-ivory"
             >
               View Listings
             </Link>

@@ -4,12 +4,11 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { PublicProperty } from "@/lib/types";
-import { formatPrice, formatPriceRange, formatSizeRange } from "@/lib/format";
+import { formatSizeRange } from "@/lib/format";
+import { PriceRangeDisplay } from "./price-display";
 
 export function PropertyCard({ property, view = "grid" }: { property: PublicProperty; view?: "grid" | "list" }) {
   const [active, setActive] = useState(0);
-  const priceLabel = formatPriceRange(property.priceMin, property.priceMax, property.currency) ??
-    formatPrice(property.price, property.currency);
   const sizeLabel = formatSizeRange(property.houseSizeSqftMin, property.houseSizeSqftMax, property.houseSizeSqft);
   const images = property.images;
 
@@ -33,13 +32,16 @@ export function PropertyCard({ property, view = "grid" }: { property: PublicProp
       onMouseLeave={() => setActive(0)}
     >
       {images.length > 0 ? (
-        <Image
-          src={images[active]}
-          alt={property.title}
-          fill
-          sizes={view === "grid" ? "(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" : "224px"}
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+        <>
+          <Image
+            src={images[active]}
+            alt={property.title}
+            fill
+            sizes={view === "grid" ? "(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" : "224px"}
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+        </>
       ) : (
         <div className="flex h-full items-center justify-center text-xs text-stone">No photo yet</div>
       )}
@@ -56,11 +58,11 @@ export function PropertyCard({ property, view = "grid" }: { property: PublicProp
       )}
 
       {property.status === "reserved" && (
-        <span className="absolute left-2 top-2 rounded-sm bg-onyx/90 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-ivory">
+        <span className="absolute left-2 top-2 rounded-full bg-onyx/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ivory">
           Reserved
         </span>
       )}
-      <span className="absolute right-2 top-2 rounded-sm bg-gold px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-onyx">
+      <span className="absolute right-2 top-2 rounded-full bg-gold px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ivory">
         {property.unitType || "Property"}
       </span>
     </div>
@@ -71,8 +73,10 @@ export function PropertyCard({ property, view = "grid" }: { property: PublicProp
       <span className="text-xs font-medium uppercase tracking-wider text-gold">{property.location}</span>
       <h3 className="font-serif text-lg font-semibold leading-snug text-ivory">{property.title}</h3>
       {property.subLocation && <p className="text-xs text-stone">{property.subLocation}</p>}
-      <div className={`flex items-center justify-between gap-3 border-white/10 ${view === "grid" ? "mt-auto border-t pt-3" : "mt-1"}`}>
-        <span className="text-sm font-semibold text-ivory">{priceLabel}</span>
+      <div className={`flex items-center justify-between gap-3 border-black/10 ${view === "grid" ? "mt-auto border-t pt-3" : "mt-1"}`}>
+        <span className="text-sm font-semibold text-ivory">
+          <PriceRangeDisplay min={property.priceMin} max={property.priceMax} single={property.price} currency={property.currency} />
+        </span>
         {sizeLabel && <span className="text-xs text-stone">{sizeLabel}</span>}
       </div>
     </div>
@@ -82,7 +86,7 @@ export function PropertyCard({ property, view = "grid" }: { property: PublicProp
     return (
       <Link
         href={`/properties/${property.id}`}
-        className="group flex overflow-hidden rounded-md border border-white/10 bg-onyx-light transition-all hover:border-gold/40 hover:shadow-xl hover:shadow-black/40"
+        className="card-shine group flex overflow-hidden rounded-3xl border border-white/50 transition-all hover:border-gold/40"
       >
         {image}
         {details}
@@ -93,7 +97,7 @@ export function PropertyCard({ property, view = "grid" }: { property: PublicProp
   return (
     <Link
       href={`/properties/${property.id}`}
-      className="group flex flex-col overflow-hidden rounded-md border border-white/10 bg-onyx-light transition-all hover:-translate-y-1 hover:border-gold/40 hover:shadow-xl hover:shadow-black/40"
+      className="card-shine group flex flex-col overflow-hidden rounded-3xl border border-white/50 transition-all hover:-translate-y-1 hover:border-gold/40"
     >
       {image}
       {details}

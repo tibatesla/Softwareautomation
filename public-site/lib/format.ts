@@ -1,21 +1,3 @@
-export function formatPrice(value: string, currency: string): string {
-  const amount = Number(value);
-  if (!amount) return "Price on request";
-  return new Intl.NumberFormat("en-KE", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-export function formatPriceRange(min: string | null, max: string | null, currency: string): string | null {
-  if (!min && !max) return null;
-  const fmt = (v: string) =>
-    new Intl.NumberFormat("en-KE", { style: "currency", currency, maximumFractionDigits: 0 }).format(Number(v));
-  if (min && max) return `${fmt(min)} – ${fmt(max)}`;
-  return fmt(min || max!);
-}
-
 export function formatSizeRange(min: string | null, max: string | null, single: string | null): string | null {
   if (min && max) return `${Number(min).toLocaleString()} – ${Number(max).toLocaleString()} sqm`;
   if (min || max) return `${Number(min || max).toLocaleString()} sqm`;

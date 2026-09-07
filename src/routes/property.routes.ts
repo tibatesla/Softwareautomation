@@ -12,6 +12,7 @@ import {
   bulkDeleteProperties,
   uploadPropertyMediaFile,
   deletePropertyMediaFile,
+  postPropertyToSocial,
 } from '../controllers/property.controller';
 
 const router = Router();
@@ -31,5 +32,8 @@ router.post('/bulk-delete', requireRole('owner', 'admin'), bulkDeleteProperties)
 // Media: same Owner/Admin restriction as other property mutations.
 router.post('/:id/media', requireRole('owner', 'admin'), uploadPropertyMedia, uploadPropertyMediaFile);
 router.delete('/:id/media', requireRole('owner', 'admin'), deletePropertyMediaFile);
+
+// Manual social-media push -- Owner/Admin only, same as every other social-facing action.
+router.post('/:id/social-post', requireRole('owner', 'admin'), postPropertyToSocial);
 
 export default router;

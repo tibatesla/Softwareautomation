@@ -4,6 +4,8 @@ import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { WhatsAppWidget } from "@/components/whatsapp-widget";
+import { CurrencyProvider } from "@/components/currency-provider";
+import { fetchKesPerUsd } from "@/lib/currency";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -20,7 +22,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Chestone Properties | Structured Property Solutions in Nairobi",
   description:
-    "Chestone Properties Ltd — curated homes and apartments in Kilimani, Kileleshwa, Westlands, Lavington, Karen, and Riverside Drive, Nairobi.",
+    "Chestone Properties Ltd — curated homes and apartments in Kilimani, Kileleshwa, Westlands, Lavington, Karen, Riverside Drive, and Runda, Nairobi.",
   keywords: [
     "Chestone Properties",
     "Nairobi real estate",
@@ -30,17 +32,22 @@ export const metadata: Metadata = {
     "Lavington houses",
     "Karen villas",
     "Riverside Drive property",
+    "Runda estates",
   ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const kesPerUsd = await fetchKesPerUsd();
+
   return (
     <html lang="en">
       <body className={`${playfair.variable} ${inter.variable} antialiased flex min-h-screen flex-col`} suppressHydrationWarning>
-        <SiteHeader />
-        <main className="flex-1">{children}</main>
-        <SiteFooter />
-        <WhatsAppWidget />
+        <CurrencyProvider kesPerUsd={kesPerUsd}>
+          <SiteHeader />
+          <main className="flex-1">{children}</main>
+          <SiteFooter />
+          <WhatsAppWidget />
+        </CurrencyProvider>
       </body>
     </html>
   );

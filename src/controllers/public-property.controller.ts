@@ -18,7 +18,7 @@ import { Request, Response } from 'express';
 import { withSystemContext } from '../config/database';
 import { Prisma } from '../../generated/prisma';
 
-export const PUBLIC_FOCUS_AREAS = ['Kilimani', 'Kileleshwa', 'Westlands', 'Lavington', 'Karen', 'Riverside'] as const;
+export const PUBLIC_FOCUS_AREAS = ['Kilimani', 'Kileleshwa', 'Westlands', 'Lavington', 'Karen', 'Riverside', 'Runda'] as const;
 export const PUBLIC_UNIT_TYPES = ['Apartment', 'Villa', 'Townhouse'] as const;
 
 // Fixed bands rather than arbitrary user-supplied min/max -- keeps the
@@ -63,6 +63,7 @@ const PUBLIC_PROPERTY_SELECT = {
   houseSizeSqftMax: true,
   developmentName: true,
   amenities: true,
+  outstandingAmenities: true,
   images: true,
   videos: true,
   createdAt: true,

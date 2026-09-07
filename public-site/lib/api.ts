@@ -53,6 +53,7 @@ export interface BookingSlot {
 }
 
 export interface BookingOptions {
+  currentName: string | null;
   propertyTitle: string | null;
   agentName: string | null;
   isVirtual: boolean;
@@ -71,11 +72,11 @@ export async function getBookingOptions(token: string): Promise<BookingOptions |
   return response.json();
 }
 
-export async function confirmBooking(token: string, slotId: string): Promise<{ whenLabel: string }> {
+export async function confirmBooking(token: string, slotId: string, fullName: string): Promise<{ whenLabel: string }> {
   const response = await fetch(`${API_BASE_URL}/bookings/${token}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ slotId }),
+    body: JSON.stringify({ slotId, fullName }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {

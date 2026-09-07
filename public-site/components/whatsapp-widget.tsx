@@ -7,9 +7,11 @@ export function WhatsAppWidget() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chat with Chestone Properties on WhatsApp"
-      className="group fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] shadow-lg shadow-black/20 transition-transform hover:scale-105 md:bottom-8 md:right-8"
+      className="pulse-glow group fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#25D366] shadow-lg shadow-black/30 transition-all hover:scale-105 hover:shadow-[0_0_28px_-2px_rgba(37,211,102,0.7)] md:bottom-8 md:right-8"
     >
       <span className="absolute inset-0 animate-ping rounded-full bg-[#25D366] opacity-75 group-hover:opacity-0" />
+      {/* Glass-dome specular highlight, matching the gold CTA buttons */}
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-full bg-gradient-to-b from-white/45 to-transparent" />
       <svg
         viewBox="0 0 32 32"
         width="30"

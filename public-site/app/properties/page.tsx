@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { getProperties } from "@/lib/api";
 import { PropertyCard } from "@/components/property-card";
+import { CollapsibleFilters } from "@/components/collapsible-filters";
 import { FOCUS_AREAS, UNIT_TYPES, PRICE_BANDS, SIZE_BANDS, SORT_OPTIONS } from "@/lib/types";
 
 export const metadata = {
   title: "Properties | Chestone Properties Ltd",
-  description: "Browse available properties in Kilimani, Kileleshwa, Westlands, Lavington, Karen, and Riverside Drive.",
+  description: "Browse available properties in Kilimani, Kileleshwa, Westlands, Lavington, Karen, Riverside Drive, and Runda.",
 };
 
 type RawSearchParams = {
@@ -84,7 +85,7 @@ export default async function PropertiesPage({
         <Link
           href={buildHref(params, { area: undefined })}
           className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-            !activeArea ? "bg-gold text-onyx" : "bg-onyx-light text-stone ring-1 ring-white/10 hover:ring-gold/40"
+            !activeArea ? "bg-gold text-ivory" : "bg-onyx-light text-stone ring-1 ring-black/10 hover:ring-gold/40"
           }`}
         >
           All Areas
@@ -94,7 +95,7 @@ export default async function PropertiesPage({
             key={a}
             href={buildHref(params, { area: a })}
             className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-              activeArea === a ? "bg-gold text-onyx" : "bg-onyx-light text-stone ring-1 ring-white/10 hover:ring-gold/40"
+              activeArea === a ? "bg-gold text-ivory" : "bg-onyx-light text-stone ring-1 ring-black/10 hover:ring-gold/40"
             }`}
           >
             {a}
@@ -102,13 +103,16 @@ export default async function PropertiesPage({
         ))}
       </div>
 
-      {/* Type filter pills */}
-      <div className="scroll-pills -mx-4 mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
-        <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-stone">Type:</span>
+      <CollapsibleFilters
+        activeCount={[activeType, activePriceBand, activeSizeBand, activeDevelopment].filter(Boolean).length}
+      >
+        {/* Type filter pills */}
+        <div className="scroll-pills -mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-stone">Type:</span>
         <Link
           href={buildHref(params, { type: undefined })}
           className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-            !activeType ? "bg-gold text-onyx" : "bg-onyx-light text-stone ring-1 ring-white/10 hover:ring-gold/40"
+            !activeType ? "bg-gold text-ivory" : "bg-onyx-light text-stone ring-1 ring-black/10 hover:ring-gold/40"
           }`}
         >
           Any
@@ -118,7 +122,7 @@ export default async function PropertiesPage({
             key={t}
             href={buildHref(params, { type: t })}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              activeType === t ? "bg-gold text-onyx" : "bg-onyx-light text-stone ring-1 ring-white/10 hover:ring-gold/40"
+              activeType === t ? "bg-gold text-ivory" : "bg-onyx-light text-stone ring-1 ring-black/10 hover:ring-gold/40"
             }`}
           >
             {t}
@@ -126,13 +130,13 @@ export default async function PropertiesPage({
         ))}
       </div>
 
-      {/* Price band filter pills */}
-      <div className="scroll-pills -mx-4 mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
-        <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-stone">Price:</span>
+        {/* Price band filter pills */}
+        <div className="scroll-pills -mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-stone">Price:</span>
         <Link
           href={buildHref(params, { price: undefined })}
           className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-            !activePriceBand ? "bg-gold text-onyx" : "bg-onyx-light text-stone ring-1 ring-white/10 hover:ring-gold/40"
+            !activePriceBand ? "bg-gold text-ivory" : "bg-onyx-light text-stone ring-1 ring-black/10 hover:ring-gold/40"
           }`}
         >
           Any
@@ -142,7 +146,7 @@ export default async function PropertiesPage({
             key={b.value}
             href={buildHref(params, { price: b.value })}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              activePriceBand?.value === b.value ? "bg-gold text-onyx" : "bg-onyx-light text-stone ring-1 ring-white/10 hover:ring-gold/40"
+              activePriceBand?.value === b.value ? "bg-gold text-ivory" : "bg-onyx-light text-stone ring-1 ring-black/10 hover:ring-gold/40"
             }`}
           >
             {b.label}
@@ -150,13 +154,13 @@ export default async function PropertiesPage({
         ))}
       </div>
 
-      {/* Size band filter pills */}
-      <div className="scroll-pills -mx-4 mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
-        <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-stone">Size:</span>
+        {/* Size band filter pills */}
+        <div className="scroll-pills -mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-stone">Size:</span>
         <Link
           href={buildHref(params, { size: undefined })}
           className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-            !activeSizeBand ? "bg-gold text-onyx" : "bg-onyx-light text-stone ring-1 ring-white/10 hover:ring-gold/40"
+            !activeSizeBand ? "bg-gold text-ivory" : "bg-onyx-light text-stone ring-1 ring-black/10 hover:ring-gold/40"
           }`}
         >
           Any
@@ -166,7 +170,7 @@ export default async function PropertiesPage({
             key={b.value}
             href={buildHref(params, { size: b.value })}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              activeSizeBand?.value === b.value ? "bg-gold text-onyx" : "bg-onyx-light text-stone ring-1 ring-white/10 hover:ring-gold/40"
+              activeSizeBand?.value === b.value ? "bg-gold text-ivory" : "bg-onyx-light text-stone ring-1 ring-black/10 hover:ring-gold/40"
             }`}
           >
             {b.label}
@@ -174,15 +178,18 @@ export default async function PropertiesPage({
         ))}
       </div>
 
-      {/* Development/project filter pills -- only rendered when there's
-          actually more than one development to distinguish between. */}
-      {developments.length > 0 && (
-        <div className="scroll-pills -mx-4 mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
+      {/* Development/project pills -- "Any" clears the filter on this list
+          as before; each named development instead links straight to its
+          own dedicated project page (see app/developments/[name]), since
+          that's a richer view than a flat filtered list -- one combined
+          gallery, aggregate pricing, and every unit type in one place. */}
+        {developments.length > 0 && (
+        <div className="scroll-pills -mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
           <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-stone">Project:</span>
           <Link
             href={buildHref(params, { development: undefined })}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              !activeDevelopment ? "bg-gold text-onyx" : "bg-onyx-light text-stone ring-1 ring-white/10 hover:ring-gold/40"
+              !activeDevelopment ? "bg-gold text-ivory" : "bg-onyx-light text-stone ring-1 ring-black/10 hover:ring-gold/40"
             }`}
           >
             Any
@@ -190,19 +197,18 @@ export default async function PropertiesPage({
           {developments.map((d) => (
             <Link
               key={d}
-              href={buildHref(params, { development: d })}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeDevelopment === d ? "bg-gold text-onyx" : "bg-onyx-light text-stone ring-1 ring-white/10 hover:ring-gold/40"
-              }`}
+              href={`/developments/${encodeURIComponent(d)}`}
+              className="shrink-0 rounded-full bg-onyx-light px-3 py-1.5 text-xs font-medium text-stone ring-1 ring-black/10 transition-colors hover:ring-gold/40"
             >
               {d}
             </Link>
           ))}
         </div>
-      )}
+        )}
+      </CollapsibleFilters>
 
       {/* Sort + view toggle */}
-      <div className="scroll-pills -mx-4 mt-4 flex flex-nowrap items-center justify-between gap-3 overflow-x-auto border-t border-white/10 px-4 pb-1 pt-4 md:mx-0 md:flex-wrap md:overflow-visible md:px-0">
+      <div className="scroll-pills -mx-4 mt-4 flex flex-nowrap items-center justify-between gap-3 overflow-x-auto border-t border-black/10 px-4 pb-1 pt-4 md:mx-0 md:flex-wrap md:overflow-visible md:px-0">
         <div className="flex shrink-0 items-center gap-3">
           <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-stone">Sort:</span>
           <Link
@@ -226,11 +232,11 @@ export default async function PropertiesPage({
           ))}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 rounded-full bg-onyx-light p-1 ring-1 ring-white/10">
+        <div className="flex shrink-0 items-center gap-1 rounded-full bg-onyx-light p-1 ring-1 ring-black/10">
           <Link
             href={buildHref(params, { view: "grid" })}
             aria-label="Grid view"
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${view === "grid" ? "bg-gold text-onyx" : "text-stone hover:text-ivory"}`}
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${view === "grid" ? "bg-gold text-ivory" : "text-stone hover:text-ivory"}`}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -242,7 +248,7 @@ export default async function PropertiesPage({
           <Link
             href={buildHref(params, { view: "list" })}
             aria-label="List view"
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${view === "list" ? "bg-gold text-onyx" : "text-stone hover:text-ivory"}`}
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${view === "list" ? "bg-gold text-ivory" : "text-stone hover:text-ivory"}`}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="4" y1="6" x2="20" y2="6" strokeLinecap="round" />

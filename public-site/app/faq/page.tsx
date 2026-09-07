@@ -59,7 +59,7 @@ const FAQS: { question: string; answer: string }[] = [
 export default function FaqPage() {
   return (
     <div>
-      <section className="border-b border-white/10 bg-onyx-light">
+      <section className="border-b border-black/10 bg-onyx-light">
         <div className="container-page flex flex-col items-center gap-4 py-16 text-center md:py-24">
           <span className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Support</span>
           <h1 className="font-serif text-3xl font-semibold text-ivory md:text-5xl">Frequently Asked Questions</h1>
@@ -74,7 +74,7 @@ export default function FaqPage() {
           {FAQS.map((faq) => (
             <details
               key={faq.question}
-              className="group rounded-md border border-white/10 bg-onyx-light px-6 py-1 open:pb-5"
+              className="card-shine group rounded-3xl border border-white/50 px-6 py-1 open:pb-5"
             >
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 font-serif text-lg font-semibold text-ivory marker:content-none">
                 {faq.question}
@@ -87,7 +87,7 @@ export default function FaqPage() {
           ))}
         </div>
 
-        <div className="mx-auto mt-14 flex max-w-3xl flex-col items-center gap-4 rounded-md border border-white/10 bg-onyx-light px-8 py-10 text-center">
+        <div className="card-shine mx-auto mt-14 flex max-w-3xl flex-col items-center gap-4 rounded-3xl border border-white/50 px-8 py-10 text-center">
           <h2 className="font-serif text-2xl font-semibold text-ivory">Still have questions?</h2>
           <p className="max-w-md text-sm text-stone">
             Chat with a Chestone consultant on WhatsApp — real answers, no automated queue.
@@ -96,7 +96,7 @@ export default function FaqPage() {
             href={whatsappGeneralEnquiryLink()}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-sm bg-gold px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-onyx transition-colors hover:bg-gold-light"
+            className="btn-gold rounded-full px-8 py-3.5 text-sm font-semibold uppercase tracking-wider text-ivory"
           >
             Chat on WhatsApp
           </a>

@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PROPERTY_AMENITY_VALUES, PROPERTY_AREA_VALUES, PROPERTY_STATUS_VALUES } from "@/lib/property-constants";
+import { AmenitiesField } from "@/components/properties/amenities-field";
+import { PROPERTY_AREA_VALUES, PROPERTY_STATUS_VALUES } from "@/lib/property-constants";
 import type { Property } from "@/lib/types";
 import { useUsers } from "@/lib/queries/users";
 import { useCreateProperty, useUpdateProperty, type CreatePropertyPayload } from "@/lib/queries/properties";
@@ -46,6 +46,7 @@ const propertyFormSchema = z.object({
   houseSizeSqftMax: optionalNumberInput,
   developmentName: z.string().optional(),
   amenities: z.array(z.string()).optional(),
+  outstandingAmenities: z.array(z.string()).optional(),
   subLocation: z.string().optional(),
 });
 
@@ -58,7 +59,7 @@ function toNumber(value: string | number | undefined): number | undefined {
 }
 
 function toDefaultValues(property?: Property): Partial<PropertyFormValues> {
-  if (!property) return { currency: "KES", amenities: [] };
+  if (!property) return { currency: "KES", amenities: [], outstandingAmenities: [] };
 
   return {
     title: property.title,
@@ -85,6 +86,7 @@ function toDefaultValues(property?: Property): Partial<PropertyFormValues> {
     houseSizeSqftMax: property.houseSizeSqftMax ? Number(property.houseSizeSqftMax) : undefined,
     developmentName: property.developmentName ?? "",
     amenities: property.amenities,
+    outstandingAmenities: property.outstandingAmenities,
     subLocation: property.subLocation ?? "",
   };
 }
@@ -103,6 +105,8 @@ export function PropertyForm({ property }: { property?: Property }) {
     register,
     handleSubmit,
     control,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<PropertyFormValues>({
     resolver: zodResolver(propertyFormSchema),
@@ -356,28 +360,17 @@ export function PropertyForm({ property }: { property?: Property }) {
 
       <section className="flex flex-col gap-2">
         <Label>Amenities</Label>
-        <Controller
-          control={control}
-          name="amenities"
-          render={({ field }) => (
-            <div className="grid grid-cols-2 gap-2 rounded-lg border p-4 sm:grid-cols-3 lg:grid-cols-4">
-              {PROPERTY_AMENITY_VALUES.map((amenity) => {
-                const checked = field.value?.includes(amenity) ?? false;
-                return (
-                  <label key={amenity} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(next) => {
-                        const current = field.value ?? [];
-                        field.onChange(next ? [...current, amenity] : current.filter((a) => a !== amenity));
-                      }}
-                    />
-                    {amenity}
-                  </label>
-                );
-              })}
-            </div>
-          )}
+        <p className="text-xs text-muted-foreground">
+          Add any amenity, or pick a suggestion below. Click the star on an amenity to highlight it as
+          &quot;Outstanding&quot; on the listing.
+        </p>
+        <AmenitiesField
+          amenities={watch("amenities") ?? []}
+          outstanding={watch("outstandingAmenities") ?? []}
+          onChange={(amenities, outstandingAmenities) => {
+            setValue("amenities", amenities, { shouldDirty: true });
+            setValue("outstandingAmenities", outstandingAmenities, { shouldDirty: true });
+          }}
         />
       </section>
 

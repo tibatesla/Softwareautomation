@@ -16,6 +16,7 @@ import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "
 import { LEAD_QUALIFICATION_STATUS_VALUES } from "@/lib/lead-constants";
 import { PROPERTY_AREA_VALUES } from "@/lib/property-constants";
 import { formatCurrency } from "@/lib/utils";
+import { countPropertyListings } from "@/lib/property-grouping";
 
 /** Groups properties by their approved area (first segment of "Area, Nairobi"),
  * with anything outside the approved list bucketed as "Other" rather than
@@ -134,8 +135,8 @@ function OwnerAdminDashboard() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Properties"
-          value={properties?.length ?? 0}
-          description={`${availableProperties} available`}
+          value={properties ? countPropertyListings(properties) : 0}
+          description={`${availableProperties} units available`}
           icon={Building2}
           color="primary"
         />

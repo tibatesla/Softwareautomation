@@ -65,7 +65,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
 
         const [lead, property] = await Promise.all([
           tx.lead.findUnique({ where: { id: parseResult.data.leadId }, select: { phoneNumber: true, fullName: true } }),
-          tx.property.findUnique({ where: { id: created.propertyId }, select: { title: true } }),
+          tx.property.findUnique({ where: { id: parseResult.data.propertyId }, select: { title: true } }),
         ]);
         if (lead) {
           notify = { leadId: parseResult.data.leadId, phoneNumber: lead.phoneNumber, leadName: lead.fullName, propertyTitle: property?.title ?? 'the property' };

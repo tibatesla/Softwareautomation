@@ -27,18 +27,24 @@ export const getBookingOptions = async (req: Request, res: Response): Promise<vo
     const lead = await tx.lead.findFirst({
       where: { bookingToken: token, awaitingBookingReply: true },
       select: {
+        fullName: true,
         propertyId: true,
         claimedByAgentId: true,
         visitPreference: true,
         property: { select: { title: true } },
       },
     });
-    if (!lead || !lead.propertyId || !lead.claimedByAgentId) return null;
+    // propertyId is allowed to be null here -- most real opening messages
+    // never name a specific listing (see confirmLeadBooking), so this page
+    // still works for a general consultation, just without a property to
+    // show. An agent is still required: there's no one to book with otherwise.
+    if (!lead || !lead.claimedByAgentId) return null;
 
     const agent = await tx.user.findUnique({ where: { id: lead.claimedByAgentId }, select: { fullName: true } });
     const slots = await generateAvailableSlots(tx, lead.claimedByAgentId, 8);
 
     return {
+      currentName: lead.fullName,
       propertyTitle: lead.property?.title ?? null,
       agentName: agent?.fullName ?? null,
       isVirtual: lead.visitPreference === 'virtual',
@@ -60,6 +66,11 @@ export const confirmBooking = async (req: Request, res: Response): Promise<void>
     res.status(400).json({ error: 'Missing slotId' });
     return;
   }
+  const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : undefined;
+  if (!fullName) {
+    res.status(400).json({ error: 'Missing fullName' });
+    return;
+  }
 
   const scheduledAt = new Date(slotId);
   if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
@@ -76,8 +87,11 @@ export const confirmBooking = async (req: Request, res: Response): Promise<void>
     // Cleared immediately, before the booking is even created -- the
     // token is single-use regardless of what happens next, same as the
     // WhatsApp path clearing awaitingBookingReply as soon as a reply
-    // arrives (not after it successfully resolves to a booking).
-    await tx.lead.update({ where: { id: lead.id }, data: { awaitingBookingReply: false, bookingToken: null } });
+    // arrives (not after it successfully resolves to a booking). The name
+    // is confirmed/corrected here rather than trusted from the WhatsApp
+    // profile alone -- a profile name can be blank, a business name, or a
+    // nickname, and this is the one point in the flow that asks directly.
+    await tx.lead.update({ where: { id: lead.id }, data: { awaitingBookingReply: false, bookingToken: null, fullName } });
 
     const confirmation = await confirmLeadBooking(tx, lead, scheduledAt, 'web booking link');
     if (!confirmation.ok) {

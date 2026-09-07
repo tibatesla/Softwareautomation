@@ -244,7 +244,9 @@ export default function BookingsPage() {
                       <TableCell>
                         {format(new Date(booking.scheduledAt), showAll ? "PP p" : "p")}
                       </TableCell>
-                      <TableCell>{property?.title ?? "—"}</TableCell>
+                      <TableCell>
+                        {property?.title ?? (booking.propertyId ? "—" : <span className="text-muted-foreground">General consultation</span>)}
+                      </TableCell>
                       <TableCell>{lead?.fullName ?? lead?.phoneNumber ?? "—"}</TableCell>
                       {canAssign && <TableCell>{agent?.fullName ?? "—"}</TableCell>}
                       <TableCell>

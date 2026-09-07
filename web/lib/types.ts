@@ -34,6 +34,9 @@ export interface User {
 }
 
 export type PropertyStatus = (typeof PROPERTY_STATUS_VALUES)[number];
+// Amenities are free text now (see property.schema.ts on the backend) --
+// PROPERTY_AMENITY_VALUES survives only as a list of quick-add suggestions
+// in the property form, not a closed set.
 export type PropertyAmenity = (typeof PROPERTY_AMENITY_VALUES)[number];
 
 export type AdPlatform = "meta" | "google" | "tiktok";
@@ -88,7 +91,7 @@ export type BookingStatus = (typeof BOOKING_STATUS_VALUES)[number];
 
 export interface Booking {
   id: string;
-  propertyId: string;
+  propertyId: string | null;
   leadId: string | null;
   agentId: string;
   scheduledAt: string;
@@ -197,8 +200,10 @@ export interface Property {
   houseSizeSqftMin: string | null;
   houseSizeSqftMax: string | null;
   developmentName: string | null;
-  amenities: PropertyAmenity[];
+  amenities: string[];
+  outstandingAmenities: string[];
   subLocation: string | null;
   images: string[];
   videos: string[];
+  socialPostedAt: string | null;
 }

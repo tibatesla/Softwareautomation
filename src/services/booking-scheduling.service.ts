@@ -107,6 +107,10 @@ export type BookingConfirmationResult = { ok: true; whenLabel: string } | { ok: 
  * the one place that does this, shared by the WhatsApp tap-to-book reply
  * and the public web booking link. `source` only affects the booking's
  * notes field, for an agent glancing at a booking to see how it came in.
+ * `lead.propertyId` is allowed to be null -- most real opening messages
+ * never name a specific listing, so requiring a match here meant almost no
+ * real lead ever got a booking offer; this books a general consultation
+ * instead (property_id left null on the row) rather than blocking it.
  */
 export const confirmLeadBooking = async (
   tx: Prisma.TransactionClient,
@@ -114,8 +118,6 @@ export const confirmLeadBooking = async (
   scheduledAt: Date,
   source: 'WhatsApp' | 'web booking link',
 ): Promise<BookingConfirmationResult> => {
-  if (!lead.propertyId) return { ok: false };
-
   const agentId = await pickAgentForBooking(tx, lead);
   if (!agentId) return { ok: false };
 
@@ -126,7 +128,7 @@ export const confirmLeadBooking = async (
       agentId,
       scheduledAt,
       isVirtual: lead.visitPreference === 'virtual',
-      notes: `Self-booked via ${source}`,
+      notes: lead.propertyId ? `Self-booked via ${source}` : `Self-booked via ${source} (general consultation, no property matched)`,
     },
   });
   // Same dealStage-advancing side effect a booking made in the CRM UI has

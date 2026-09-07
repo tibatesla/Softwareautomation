@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProperty } from "@/lib/api";
-import { formatPrice, formatPriceRange, formatSizeRange, whatsappEnquiryLink } from "@/lib/format";
+import { formatSizeRange, whatsappEnquiryLink } from "@/lib/format";
 import { PropertyGallery } from "@/components/property-gallery";
+import { AmenitiesList } from "@/components/amenities-list";
+import { PriceRangeDisplay } from "@/components/price-display";
 
 export default async function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,10 +13,6 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   if (!property) {
     notFound();
   }
-
-  const priceLabel =
-    formatPriceRange(property.priceMin, property.priceMax, property.currency) ??
-    formatPrice(property.price, property.currency);
 
   const facts = [
     { label: "Unit Type", value: property.unitType },
@@ -55,10 +53,18 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
             {property.location}
             {property.subLocation ? ` — ${property.subLocation}` : ""}
           </span>
-          <h1 className="mt-2 font-serif text-3xl font-semibold text-ivory md:text-4xl">{property.title}</h1>
+          <h1 className="mt-2 font-serif text-xl font-semibold text-ivory md:text-3xl">{property.title}</h1>
+          {property.developmentName && (
+            <Link
+              href={`/developments/${encodeURIComponent(property.developmentName)}`}
+              className="mt-2 inline-block text-xs font-medium text-stone underline-offset-4 hover:text-gold hover:underline"
+            >
+              Part of {property.developmentName} — view all unit types
+            </Link>
+          )}
         </div>
         {property.status === "reserved" && (
-          <span className="rounded-sm bg-onyx-light px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-ivory ring-1 ring-white/10">
+          <span className="rounded-full bg-onyx-light px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-ivory ring-1 ring-black/10">
             Reserved
           </span>
         )}
@@ -68,7 +74,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
       {property.images.length > 0 ? (
         <PropertyGallery images={property.images} title={property.title} />
       ) : (
-        <div className="mt-8 flex aspect-video items-center justify-center rounded-md bg-onyx-light text-sm text-stone">
+        <div className="card-shine mt-8 flex aspect-video items-center justify-center rounded-3xl border border-white/50 text-sm text-stone">
           Photos coming soon
         </div>
       )}
@@ -76,12 +82,17 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
       <div className="mt-12 grid gap-12 lg:grid-cols-3">
         {/* Main content */}
         <div className="lg:col-span-2">
-          <div className="flex items-baseline gap-3">
-            <span className="font-serif text-3xl font-semibold text-ivory">{priceLabel}</span>
-            {property.paymentPlanStructure && (
-              <span className="text-sm text-stone">· {property.paymentPlanStructure}</span>
-            )}
-          </div>
+          <span className="block font-serif text-2xl font-semibold text-ivory md:text-3xl">
+            <PriceRangeDisplay
+              min={property.priceMin}
+              max={property.priceMax}
+              single={property.price}
+              currency={property.currency}
+            />
+          </span>
+          {property.paymentPlanStructure && (
+            <p className="mt-2 text-sm text-stone">{property.paymentPlanStructure}</p>
+          )}
 
           {property.description && (
             <>
@@ -110,15 +121,8 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
             <>
               <div className="gold-rule mt-8" />
               <h2 className="mt-4 font-serif text-xl font-semibold text-ivory">Amenities</h2>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {property.amenities.map((amenity) => (
-                  <span
-                    key={amenity}
-                    className="rounded-full bg-onyx-light px-3.5 py-1.5 text-xs font-medium text-ivory ring-1 ring-white/10"
-                  >
-                    {amenity}
-                  </span>
-                ))}
+              <div className="mt-4">
+                <AmenitiesList amenities={property.amenities} outstanding={property.outstandingAmenities} />
               </div>
             </>
           )}
@@ -126,7 +130,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
 
         {/* Enquiry card */}
         <div>
-          <div className="sticky top-28 rounded-md border border-white/10 bg-onyx-light p-8">
+          <div className="card-shine sticky top-28 rounded-3xl border border-white/50 p-8">
             <h3 className="font-serif text-xl font-semibold text-ivory">Interested in this property?</h3>
             <p className="mt-2 text-sm text-stone">
               Message a Chestone consultant directly on WhatsApp — we&apos;ll confirm availability and set up a
@@ -136,7 +140,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
               href={whatsappEnquiryLink(property.title)}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-6 flex items-center justify-center gap-2 rounded-sm bg-gold px-6 py-3.5 text-sm font-semibold uppercase tracking-wider text-onyx transition-colors hover:bg-gold-light"
+              className="btn-gold mt-6 flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-sm font-semibold uppercase tracking-wider text-ivory"
             >
               Enquire on WhatsApp
             </a>

@@ -112,3 +112,17 @@ export function useDeletePropertyMedia(id: string) {
     },
   });
 }
+
+export interface SocialPostResult {
+  result: { facebook: "posted" | "failed" | "skipped"; instagram: "posted" | "failed" | "skipped" };
+  unitsIncluded: number;
+}
+
+export function usePostPropertyToSocial() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<SocialPostResult>(`/properties/${id}/social-post`, { method: "POST", body: JSON.stringify({}) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: propertiesKey }),
+  });
+}
