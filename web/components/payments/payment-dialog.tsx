@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
@@ -43,6 +44,7 @@ const paymentFormSchema = z.object({
     .optional()
     .refine((v) => !v || v <= todayDateString(), "Payment date cannot be in the future"),
   notes: z.string().optional(),
+  isDeposit: z.boolean().optional(),
 });
 
 type PaymentFormValues = z.infer<typeof paymentFormSchema>;
@@ -75,6 +77,7 @@ export function PaymentDialog() {
         paymentMethod: values.paymentMethod || undefined,
         paymentDate: values.paymentDate ? new Date(values.paymentDate).toISOString() : undefined,
         notes: values.notes || undefined,
+        isDeposit: values.isDeposit,
       });
       toast.success("Payment recorded");
       reset({ currency: "KES", payerType: "lead" });
@@ -171,6 +174,15 @@ export function PaymentDialog() {
                 </Select>
               )}
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Controller
+              control={control}
+              name="isDeposit"
+              render={({ field }) => <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />}
+            />
+            <Label>This is the deposit payment</Label>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

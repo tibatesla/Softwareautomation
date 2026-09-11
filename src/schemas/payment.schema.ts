@@ -21,6 +21,10 @@ export const createPaymentSchema = z.object({
   // like any other payment, so a commission stays traceable to the deal
   // that produced it.
   payerType: z.enum(paymentPayerTypeValues).optional(),
+  // Staff-flagged, not inferred from amount -- deposit percentages vary by
+  // development, so an explicit flag is the only reliable signal. Firing
+  // the Meta conversion event (see payment.controller.ts) hinges on this.
+  isDeposit: z.boolean().optional(),
 });
 
 // Owner-only (see payment.routes.ts + the payments_owner_update RLS policy).
@@ -36,6 +40,7 @@ export const updatePaymentSchema = z.object({
   }),
   notes: z.string().optional(),
   payerType: z.enum(paymentPayerTypeValues).optional(),
+  isDeposit: z.boolean().optional(),
 });
 
 export const bulkDeleteSchema = z.object({

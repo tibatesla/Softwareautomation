@@ -1,9 +1,11 @@
 "use client";
 
 import { Contact, CalendarCheck, ShieldAlert, Wallet, Users } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { format } from "date-fns";
 import { useAgentPerformance } from "@/lib/queries/agent-performance";
 import { StatCard } from "@/components/stat-card";
+import { ReportDownloadMenu } from "@/components/report-download-menu";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +16,10 @@ const leadsChartConfig: ChartConfig = { leadsClaimed: { label: "Leads claimed", 
 const bookingsChartConfig: ChartConfig = { bookingsCompleted: { label: "Bookings completed", color: "var(--chart-2)" } };
 const slaChartConfig: ChartConfig = { slaViolations: { label: "SLA violations", color: "var(--chart-4)" } };
 const revenueChartConfig: ChartConfig = { revenueClosed: { label: "Revenue closed", color: "var(--chart-3)" } };
+const trendChartConfig: ChartConfig = {
+  leadsClaimed: { label: "Leads claimed", color: "var(--chart-1)" },
+  bookingsCompleted: { label: "Bookings completed", color: "var(--chart-2)" },
+};
 
 /** First name only -- keeps chart x-axis labels from overlapping with 5+ agents. */
 function shortName(fullName: string): string {
@@ -21,7 +27,9 @@ function shortName(fullName: string): string {
 }
 
 export default function AgentPerformancePage() {
-  const { data: agents, isLoading, error } = useAgentPerformance();
+  const { data, isLoading, error } = useAgentPerformance();
+  const agents = data?.agents;
+  const trend = (data?.trend ?? []).map((t) => ({ ...t, week: format(new Date(t.weekStart), "MMM d") }));
 
   const totals = (agents ?? []).reduce(
     (acc, a) => ({
@@ -43,9 +51,12 @@ export default function AgentPerformancePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Agent Performance</h1>
-        <p className="text-muted-foreground">Leads, bookings, SLA record, and revenue closed per agent.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Agent Performance</h1>
+          <p className="text-muted-foreground">Leads, bookings, SLA record, and revenue closed per agent.</p>
+        </div>
+        <ReportDownloadMenu resource="agent-performance" />
       </div>
 
       {isLoading && <p className="text-muted-foreground">Loading agent performance...</p>}
@@ -59,6 +70,45 @@ export default function AgentPerformancePage() {
             <StatCard label="Bookings completed" value={totals.bookingsCompleted} icon={CalendarCheck} color="success" />
             <StatCard label="SLA violations" value={totals.slaViolations} icon={ShieldAlert} color="warning" />
             <StatCard label="Revenue closed" value={formatCurrency(totals.revenueClosed)} icon={Wallet} color="success" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Leads &amp; bookings trend</CardTitle>
+                <CardDescription>Last 12 weeks -- new leads claimed and bookings completed</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer config={trendChartConfig} className="aspect-auto h-64 w-full">
+                  <LineChart data={trend}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis dataKey="week" tickLine={false} axisLine={false} />
+                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line type="monotone" dataKey="leadsClaimed" stroke="var(--color-leadsClaimed)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="bookingsCompleted" stroke="var(--color-bookingsCompleted)" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Revenue trend</CardTitle>
+                <CardDescription>Last 12 weeks -- payments recorded, by week</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer config={revenueChartConfig} className="aspect-auto h-64 w-full">
+                  <LineChart data={trend}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis dataKey="week" tickLine={false} axisLine={false} />
+                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={48} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line type="monotone" dataKey="revenueClosed" stroke="var(--color-revenueClosed)" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

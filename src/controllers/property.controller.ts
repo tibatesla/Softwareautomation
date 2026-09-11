@@ -22,7 +22,7 @@ const reconcileOutstandingAmenities = <T extends { amenities?: string[]; outstan
   return { ...data, outstandingAmenities: data.outstandingAmenities.filter((a) => allowed.has(a)) };
 };
 
-const propertyToListing = (p: Property, imageUrlOverride?: string): ListingForPost => ({
+const propertyToListing = (p: Property): ListingForPost => ({
   id: p.id,
   title: p.title,
   unitType: p.unitType,
@@ -37,7 +37,7 @@ const propertyToListing = (p: Property, imageUrlOverride?: string): ListingForPo
   houseSizeSqftMax: p.houseSizeSqftMax ? Number(p.houseSizeSqftMax) : null,
   amenities: p.amenities,
   outstandingAmenities: p.outstandingAmenities,
-  imageUrl: imageUrlOverride ?? p.images[0] ?? null,
+  imageUrl: p.images[0] ?? null,
 });
 
 export const listProperties = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -226,56 +226,21 @@ export const uploadPropertyMediaFile = async (req: AuthenticatedRequest, res: Re
     const uploadResult = await uploadMediaBuffer(file.buffer, propertyId, resourceType);
     const field = resourceType === 'image' ? 'images' : 'videos';
 
-    let shouldAutoPost = false;
-    let siblingsToPost: Property[] = [];
+    // Uploading a photo no longer auto-posts to social -- per the client's
+    // request, every post now goes out only when an owner/admin explicitly
+    // clicks "Post to Social" (see postPropertyToSocial below), so a new
+    // listing's photos can be reviewed before it goes live publicly.
     const property = await withRLSContext(id, role, async (tx) => {
       const existing = await tx.property.findUniqueOrThrow({ where: { id: propertyId } });
       const updatedList = [...(existing as unknown as Record<string, string[]>)[field], uploadResult.url];
-      // Auto-post fires once, the moment a property gets its first photo --
-      // whether it actually succeeds determines socialPostedAt further
-      // below, once the real publish attempt returns. This gate condition
-      // (existing.images.length === 0) can only be true once per property
-      // regardless, so a failed attempt can't accidentally re-fire here --
-      // it just leaves the property retryable via the CRM's manual
-      // "Post to Social" button instead of wrongly marked done forever.
-      shouldAutoPost = resourceType === 'image' && existing.images.length === 0 && !existing.socialPostedAt;
 
-      const updated = await tx.property.update({
+      return tx.property.update({
         where: { id: propertyId },
         data: { [field]: updatedList },
       });
-
-      if (shouldAutoPost && existing.developmentName) {
-        const siblings = await tx.property.findMany({ where: { developmentName: existing.developmentName } });
-        siblingsToPost = siblings.map((s) => (s.id === propertyId ? updated : s));
-      }
-
-      return updated;
     });
 
     res.status(201).json(property);
-
-    if (shouldAutoPost) {
-      const toListing = (p: Property) => propertyToListing(p, p.id === propertyId ? uploadResult.url : undefined);
-      const group = siblingsToPost.length > 0 ? siblingsToPost : [property];
-      const listings = group.map(toListing);
-      const developmentName = property.developmentName;
-
-      publishListingGroup(listings, developmentName)
-        .then(async (result) => {
-          if (result.facebook === 'posted' || result.instagram === 'posted') {
-            await withRLSContext(id, role, (tx) =>
-              tx.property.updateMany({ where: { id: { in: group.map((p) => p.id) } }, data: { socialPostedAt: new Date() } }),
-            );
-          } else {
-            console.error(
-              `[Property Media] Auto-post fully failed for "${developmentName ?? propertyId}", leaving unposted so it can be retried:`,
-              JSON.stringify(result),
-            );
-          }
-        })
-        .catch((error) => console.error('[Property Media] Auto-post to social failed:', error));
-    }
   } catch (error) {
     console.error('[Property Media] Upload failed:', error);
     res.status(404).json({ error: 'Property not found, or upload failed' });
@@ -283,13 +248,11 @@ export const uploadPropertyMediaFile = async (req: AuthenticatedRequest, res: Re
 };
 
 /**
- * Manual, on-demand counterpart to the automatic first-photo trigger above
- * -- for the ~100 properties that already had photos before auto-posting
- * existed, nothing will ever fire for them on its own (the auto-post gate
- * requires zero existing images). This lets an owner/admin push one
- * property (or, if it has a developmentName, its whole development group)
- * to social at a moment of their own choosing, rather than a bulk backfill
- * blasting through Meta's rate limits the way an earlier attempt did.
+ * The only way a property (or, if it has a developmentName, its whole
+ * development group) goes out to Facebook/Instagram -- uploading a photo
+ * no longer auto-posts (see uploadPropertyMediaFile above). Owner/admin
+ * only, same as every other social-facing action, so publishing is always
+ * a deliberate choice at a moment of the client's own choosing.
  */
 export const postPropertyToSocial = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id, role } = req.user!;

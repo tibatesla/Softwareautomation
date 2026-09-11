@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { withRLSContext, AppRole } from '../config/database';
 import { createPaymentSchema, updatePaymentSchema, bulkDeleteSchema } from '../schemas/payment.schema';
+import { dispatchDepositPaidEvent } from '../services/meta-capi.service';
 
 export const listPayments = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id, role } = req.user!;
@@ -47,6 +48,26 @@ export const createPayment = async (req: AuthenticatedRequest, res: Response): P
       tx.payment.create({ data: { ...parseResult.data, recordedBy: id } }),
     );
     res.status(201).json(payment);
+
+    // Best-effort, fire-and-forget -- never delay or fail the payment
+    // record over an ad-attribution signal (same principle as the
+    // WhatsApp lead-qualification CAPI dispatch). Only fires when staff
+    // flagged this payment as the deposit and it's tied to a lead; a
+    // missing ctwaClid on that lead is a normal, expected no-op inside
+    // dispatchDepositPaidEvent itself.
+    if (payment.isDeposit && payment.leadId) {
+      withRLSContext(id, role, (tx) => tx.lead.findUnique({ where: { id: payment.leadId! }, select: { ctwaClid: true } }))
+        .then((lead) => {
+          if (!lead?.ctwaClid) return;
+          return dispatchDepositPaidEvent({
+            ctwaClid: lead.ctwaClid,
+            eventId: `deposit_${payment.id}`,
+            currency: payment.currency,
+            value: Number(payment.amount),
+          });
+        })
+        .catch((error) => console.error('[Payment] Deposit CAPI dispatch lookup failed:', error));
+    }
   } catch {
     res.status(400).json({ error: 'Unable to record payment -- check propertyId/leadId reference valid records, and that the property is assigned to you' });
   }

@@ -11,6 +11,7 @@ export interface CreatePaymentPayload {
   paymentDate?: string;
   notes?: string;
   payerType?: PaymentPayerType;
+  isDeposit?: boolean;
 }
 
 export interface UpdatePaymentPayload {
@@ -20,6 +21,7 @@ export interface UpdatePaymentPayload {
   paymentDate?: string;
   notes?: string;
   payerType?: PaymentPayerType;
+  isDeposit?: boolean;
 }
 
 const paymentsKey = ["payments"] as const;

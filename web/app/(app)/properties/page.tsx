@@ -17,6 +17,7 @@ import { PROPERTY_STATUS_COLOR } from "@/lib/status-colors";
 import { PROPERTY_AREA_VALUES } from "@/lib/property-constants";
 import { formatCurrency, cn } from "@/lib/utils";
 import { groupByDevelopment, countPropertyListings } from "@/lib/property-grouping";
+import { ReportDownloadMenu } from "@/components/report-download-menu";
 
 export default function PropertiesPage() {
   const router = useRouter();
@@ -127,11 +128,14 @@ export default function PropertiesPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Properties</h1>
-        {canManage && (
-          <Button render={<Link href="/properties/new" />} nativeButton={false}>
-            New Property
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <ReportDownloadMenu resource="properties" />
+          {canManage && (
+            <Button render={<Link href="/properties/new" />} nativeButton={false}>
+              New Property
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading && <p className="text-muted-foreground">Loading properties...</p>}

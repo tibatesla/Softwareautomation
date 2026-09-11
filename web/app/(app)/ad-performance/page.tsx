@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AD_PLATFORM_COLOR } from "@/lib/status-colors";
 import { formatCurrency } from "@/lib/utils";
+import { ReportDownloadMenu } from "@/components/report-download-menu";
 
 const PLATFORMS: AdPlatform[] = ["meta", "google", "tiktok"];
 
@@ -127,23 +128,26 @@ export default function AdPerformancePage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Ad Performance</h1>
-        <Select
-          value={platform ?? "all"}
-          onValueChange={(v) => setPlatform(v === "all" ? undefined : (v as AdPlatform))}
-          items={{ all: "All platforms", ...Object.fromEntries(PLATFORMS.map((p) => [p, p])) }}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all" label="All platforms">All platforms</SelectItem>
-            {PLATFORMS.map((p) => (
-              <SelectItem key={p} value={p} label={p}>
-                {p}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <ReportDownloadMenu resource="ad-performance" query={platform ? { platform } : undefined} />
+          <Select
+            value={platform ?? "all"}
+            onValueChange={(v) => setPlatform(v === "all" ? undefined : (v as AdPlatform))}
+            items={{ all: "All platforms", ...Object.fromEntries(PLATFORMS.map((p) => [p, p])) }}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" label="All platforms">All platforms</SelectItem>
+              {PLATFORMS.map((p) => (
+                <SelectItem key={p} value={p} label={p}>
+                  {p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Tabs defaultValue="performance">

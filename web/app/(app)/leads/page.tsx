@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { StatCard } from "@/components/stat-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ApiError } from "@/lib/api";
+import { ReportDownloadMenu } from "@/components/report-download-menu";
 import { LEAD_QUALIFICATION_COLOR } from "@/lib/status-colors";
 import { cn } from "@/lib/utils";
 
@@ -86,11 +87,14 @@ export default function LeadsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Leads</h1>
-        {canCreate && (
-          <Button render={<Link href="/leads/new" />} nativeButton={false}>
-            New Lead
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <ReportDownloadMenu resource="leads" />
+          {canCreate && (
+            <Button render={<Link href="/leads/new" />} nativeButton={false}>
+              New Lead
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading && <p className="text-muted-foreground">Loading leads...</p>}

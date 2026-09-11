@@ -114,7 +114,12 @@ export function SiteFooter() {
       <div className="border-t border-black/10">
         <div className="container-page flex flex-col items-center justify-between gap-2 py-6 text-xs text-stone/70 md:flex-row">
           <span>© {new Date().getFullYear()} Chestone Properties Ltd. All rights reserved.</span>
-          <span>Structured Property Solutions</span>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy-policy" className="transition-colors hover:text-gold">
+              Privacy Policy
+            </Link>
+            <span>Structured Property Solutions</span>
+          </div>
         </div>
       </div>
     </footer>

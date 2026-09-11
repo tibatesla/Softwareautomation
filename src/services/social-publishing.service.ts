@@ -83,7 +83,15 @@ const postFacebookPhotos = async (imageUrls: string[], caption: string, token: s
 // every property photo is already a Cloudinary URL, a safe crop can be
 // applied on the fly via a URL transformation instead of fetching each
 // image to check its real dimensions ourselves.
-const toInstagramSafeUrl = (url: string): string => url.replace('/image/upload/', '/image/upload/c_fill,g_auto,ar_4:5/');
+//
+// Deliberately uses fixed pixel dimensions (w_1080,h_1350 -- Instagram's
+// own recommended 4:5 size) rather than `ar_4:5`. Confirmed live: `ar_4:5`
+// lets Cloudinary pick integer output dimensions on its own, and for some
+// source aspect ratios that rounds to e.g. 406x508 (0.7992), just under
+// the 0.8 floor -- Instagram then rejects the "correctly" cropped image
+// with the same generic "media could not be fetched" error. Fixed pixel
+// dimensions can't round away from the target ratio.
+const toInstagramSafeUrl = (url: string): string => url.replace('/image/upload/', '/image/upload/c_fill,g_auto,w_1080,h_1350/');
 
 /**
  * A `c_fill,g_auto,ar_4:5` URL is a derived asset Cloudinary has likely
@@ -94,7 +102,16 @@ const toInstagramSafeUrl = (url: string): string => url.replace('/image/upload/'
  * could not be fetched" because Cloudinary hadn't finished generating it
  * yet on Instagram's first hit. Fetching it ourselves first forces
  * Cloudinary to generate and cache it (30-day cache-control), so
- * Instagram's subsequent fetch always lands on a warm URL.
+ * Instagram's subsequent fetch (almost always) lands on a warm URL.
+ *
+ * Confirmed this alone isn't fully reliable: in a 14-development batch
+ * run, 6 still failed with the same error despite every warm request
+ * itself succeeding -- most likely CDN edge propagation lag (our warm
+ * request and Instagram's own fetch can land on different Cloudinary
+ * edge nodes, so "cached at origin" doesn't guarantee "cached at the
+ * edge Instagram happens to hit"). `settleAfterWarm` below is a second
+ * layer against that: a short pause after warming, before Instagram
+ * ever sees the URL.
  */
 const warmUrl = async (url: string): Promise<void> => {
   try {
@@ -104,10 +121,13 @@ const warmUrl = async (url: string): Promise<void> => {
   }
 };
 
+const settleAfterWarm = () => new Promise((r) => setTimeout(r, 4000));
+
 const postInstagramMedia = async (imageUrls: string[], caption: string, token: string, igAccountId: string): Promise<void> => {
   if (imageUrls.length === 0) return;
   const safeUrls = imageUrls.map(toInstagramSafeUrl);
   await Promise.all(safeUrls.map(warmUrl));
+  await settleAfterWarm();
 
   if (safeUrls.length === 1) {
     const container = await axios.post(`${GRAPH_API_BASE}/${igAccountId}/media`, null, {
@@ -143,8 +163,16 @@ export type PublishResult = { facebook: 'posted' | 'failed' | 'skipped'; instagr
  * whichever of the Facebook Page / Instagram Business account are
  * configured -- either, both, or neither ('skipped' if the relevant env
  * var isn't set). Each platform's failure is independent.
+ *
+ * `platforms` narrows which platform(s) to actually attempt -- for
+ * retrying just the side that failed on a listing that already succeeded
+ * on the other, so the working platform never gets posted to twice.
  */
-export const publishListingGroup = async (listings: ListingForPost[], developmentName: string | null): Promise<PublishResult> => {
+export const publishListingGroup = async (
+  listings: ListingForPost[],
+  developmentName: string | null,
+  platforms: { facebook: boolean; instagram: boolean } = { facebook: true, instagram: true },
+): Promise<PublishResult> => {
   const result: PublishResult = { facebook: 'skipped', instagram: 'skipped' };
   if (listings.length === 0) return result;
 
@@ -154,8 +182,8 @@ export const publishListingGroup = async (listings: ListingForPost[], developmen
     return result;
   }
 
-  const pageId = process.env.META_PAGE_ID;
-  const igAccountId = process.env.META_INSTAGRAM_BUSINESS_ACCOUNT_ID;
+  const pageId = platforms.facebook ? process.env.META_PAGE_ID : undefined;
+  const igAccountId = platforms.instagram ? process.env.META_INSTAGRAM_BUSINESS_ACCOUNT_ID : undefined;
   const caption = await buildDevelopmentCaption(listings, developmentName);
   const imageUrls = listings.map((l) => l.imageUrl).filter((url): url is string => Boolean(url));
 

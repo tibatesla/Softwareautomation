@@ -18,6 +18,7 @@ import adPerformanceRoutes from './routes/ad-performance.routes';
 import agentPerformanceRoutes from './routes/agent-performance.routes';
 import publicPropertyRoutes from './routes/public-property.routes';
 import publicBookingRoutes from './routes/public-booking.routes';
+import reportRoutes from './routes/report.routes';
 import { AuthenticatedRequest } from './middlewares/auth.middleware'; // Needed for req.rawBody typing
 
 const app: Application = express();
@@ -65,6 +66,8 @@ app.use('/api/webhooks/whatsapp', whatsappRoutes);
 app.use('/api/ad-performance', adPerformanceRoutes);
 
 app.use('/api/agent-performance', agentPerformanceRoutes);
+
+app.use('/api/reports', reportRoutes);
 
 // Public customer website (chestoneproperties.com) -- no auth, read-only, field-restricted in the controller.
 app.use('/api/public/properties', publicPropertyRoutes);

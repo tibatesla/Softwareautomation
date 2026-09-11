@@ -56,7 +56,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     href: "/agent-performance",
     label: "Agent Performance",
-    roles: ["owner"],
+    roles: ["owner", "admin", "agent"],
     icon: Trophy,
     iconClassName: "text-yellow-400",
   },

@@ -8,6 +8,7 @@ import { useProperties } from "@/lib/queries/properties";
 import { useLeads } from "@/lib/queries/leads";
 import { PaymentDialog } from "@/components/payments/payment-dialog";
 import { PaymentEditDialog } from "@/components/payments/payment-edit-dialog";
+import { ReportDownloadMenu } from "@/components/report-download-menu";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,7 +81,10 @@ export default function PaymentsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Payments</h1>
-        <PaymentDialog />
+        <div className="flex items-center gap-2">
+          <ReportDownloadMenu resource="payments" />
+          <PaymentDialog />
+        </div>
       </div>
 
       {isLoading && <p className="text-muted-foreground">Loading payments...</p>}
@@ -158,7 +162,12 @@ export default function PaymentsPage() {
                     </TableCell>
                     <TableCell>{property?.title ?? "—"}</TableCell>
                     <TableCell>{lead?.fullName ?? lead?.phoneNumber ?? "—"}</TableCell>
-                    <TableCell className="font-medium">{formatCurrency(payment.amount, payment.currency)}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {formatCurrency(payment.amount, payment.currency)}
+                        {payment.isDeposit && <Badge variant="success">Deposit</Badge>}
+                      </div>
+                    </TableCell>
                     <TableCell>{payment.paymentMethod ?? "—"}</TableCell>
                     <TableCell className="max-w-xs truncate">{payment.notes ?? "—"}</TableCell>
                     {canEdit && (

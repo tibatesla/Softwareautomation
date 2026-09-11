@@ -46,8 +46,17 @@ async function forward(
     return NextResponse.json(data, { status: backendResponse.status });
   }
 
-  const text = await backendResponse.text();
-  return new Response(text, { status: backendResponse.status });
+  // Binary-safe fallback -- reading as .text() here would corrupt any
+  // non-UTF-8 payload (a PDF or .xlsx report download, confirmed live: the
+  // bytes came back mangled through the old text() path). Content-Disposition
+  // is forwarded too so the browser saves the file under the backend's
+  // intended name instead of a generic one.
+  const buffer = await backendResponse.arrayBuffer();
+  const headers = new Headers();
+  headers.set("Content-Type", contentType || "application/octet-stream");
+  const disposition = backendResponse.headers.get("content-disposition");
+  if (disposition) headers.set("Content-Disposition", disposition);
+  return new Response(buffer, { status: backendResponse.status, headers });
 }
 
 export const GET = forward;

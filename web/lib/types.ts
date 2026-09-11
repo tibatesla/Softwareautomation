@@ -84,6 +84,7 @@ export interface Payment {
   recordedBy: string;
   notes: string | null;
   payerType: PaymentPayerType;
+  isDeposit: boolean;
   createdAt: string;
 }
 
@@ -155,6 +156,18 @@ export interface AgentPerformance {
   bookingsMissed: number;
   slaViolations: number;
   revenueClosed: number;
+}
+
+export interface AgentPerformanceTrendPoint {
+  weekStart: string;
+  leadsClaimed: number;
+  bookingsCompleted: number;
+  revenueClosed: number;
+}
+
+export interface AgentPerformanceResponse {
+  agents: AgentPerformance[];
+  trend: AgentPerformanceTrendPoint[];
 }
 
 export type MessageDirection = "inbound" | "outbound";
