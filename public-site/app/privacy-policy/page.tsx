@@ -2,10 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { whatsappGeneralEnquiryLink } from "@/lib/format";
 
+const title = "Privacy Policy | Chestone Properties";
+const description =
+  "How Chestone Properties Ltd collects, uses, and protects your information when you browse our listings or reach out to a consultant.";
+
 export const metadata: Metadata = {
-  title: "Privacy Policy | Chestone Properties",
-  description:
-    "How Chestone Properties Ltd collects, uses, and protects your information when you browse our listings or reach out to a consultant.",
+  title,
+  description,
+  alternates: { canonical: "/privacy-policy" },
+  openGraph: { title, description, type: "website" },
+  twitter: { card: "summary", title, description },
 };
 
 const SECTIONS: { heading: string; body: React.ReactNode }[] = [

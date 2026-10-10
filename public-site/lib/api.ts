@@ -16,8 +16,9 @@ export interface PropertyFilters {
   type?: string;
   price?: string;
   size?: string;
-  development?: string;
   sort?: string;
+  q?: string;
+  maxPrice?: string;
 }
 
 export async function getProperties(filters: PropertyFilters = {}): Promise<PublicProperty[]> {
@@ -26,8 +27,9 @@ export async function getProperties(filters: PropertyFilters = {}): Promise<Publ
   if (filters.type) url.searchParams.set("type", filters.type);
   if (filters.price) url.searchParams.set("price", filters.price);
   if (filters.size) url.searchParams.set("size", filters.size);
-  if (filters.development) url.searchParams.set("development", filters.development);
   if (filters.sort) url.searchParams.set("sort", filters.sort);
+  if (filters.q) url.searchParams.set("q", filters.q);
+  if (filters.maxPrice) url.searchParams.set("maxPrice", filters.maxPrice);
 
   const response = await fetch(url, { next: { revalidate: REVALIDATE_SECONDS } });
   if (!response.ok) {

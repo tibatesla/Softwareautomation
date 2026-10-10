@@ -2,7 +2,32 @@ import Image from "next/image";
 import Link from "next/link";
 import { getProperties } from "@/lib/api";
 import { PropertyCard } from "@/components/property-card";
+import { HeroBackgroundSlider } from "@/components/hero-background-slider";
+import { BudgetCalculator } from "@/components/budget-calculator";
 import { FOCUS_AREAS } from "@/lib/types";
+
+// A property's "effective" price for the budget tool's min/max range --
+// mirrors the backend's own effectivePrice fallback (flat price if set,
+// otherwise the bottom of its priceMin/priceMax range).
+function effectivePrice(p: { price: string; priceMin: string | null; priceMax: string | null }): number {
+  const price = Number(p.price);
+  if (price > 0) return price;
+  if (p.priceMin) return Number(p.priceMin);
+  if (p.priceMax) return Number(p.priceMax);
+  return 0;
+}
+
+// Fisher-Yates -- Array.prototype.sort(() => Math.random() - 0.5) is a
+// well-known biased shuffle (unequal permutation probabilities), not worth
+// the subtle bug just to save a few lines here.
+function shuffle<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 const AREA_TAGLINES: Record<string, string> = {
   Kilimani: "High-rise apartment living in Nairobi's business district",
@@ -17,11 +42,21 @@ const AREA_TAGLINES: Record<string, string> = {
 export default async function HomePage() {
   const properties = await getProperties().catch(() => []);
   const featured = properties.slice(0, 6);
+  // One photo per property (not every photo from a few units), so the
+  // slideshow reads as "our listings" rather than one apartment's gallery.
+  const heroImages = shuffle(properties.filter((p) => p.images.length > 0))
+    .slice(0, 8)
+    .map((p) => p.images[0]);
+
+  const prices = properties.map(effectivePrice).filter((n) => n > 0);
+  const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+  const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
 
   return (
     <div>
       {/* Hero */}
       <section className="relative overflow-hidden bg-onyx text-ivory">
+        <HeroBackgroundSlider images={heroImages} />
         <div className="pointer-events-none absolute -right-24 -top-24 size-[28rem] rounded-full bg-gold/15 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -left-16 size-[26rem] rounded-full bg-gold/12 blur-3xl" />
         <div className="pointer-events-none absolute left-1/2 top-1/3 size-[24rem] -translate-x-1/2 rounded-full bg-gold-light/8 blur-3xl" />
@@ -33,8 +68,8 @@ export default async function HomePage() {
             <span className="text-gold">Nairobi&apos;s</span> Finest Neighborhoods
           </h1>
           <p className="max-w-xl text-base text-stone md:text-lg">
-            Curated homes and apartments in Kilimani, Kileleshwa, Westlands, Lavington, Karen,
-            Riverside Drive, and Runda — every listing verified, every enquiry handled by a dedicated consultant.
+            Curated homes and apartments in Karen, Lavington, Runda, Westlands, Kilimani, Kileleshwa,
+            and Riverside Drive — every listing verified, every enquiry handled by a dedicated consultant.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
@@ -82,6 +117,13 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* Budget search */}
+      {prices.length > 0 && (
+        <section className="container-page pb-24">
+          <BudgetCalculator minPrice={minPrice} maxPrice={maxPrice} />
+        </section>
+      )}
+
       {/* Featured properties */}
       {featured.length > 0 && (
         <section className="bg-onyx-light py-24">
@@ -97,8 +139,8 @@ export default async function HomePage() {
             </div>
 
             <div className="mt-12 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {featured.map((property) => (
-                <PropertyCard key={property.id} property={property} />
+              {featured.map((property, index) => (
+                <PropertyCard key={property.id} property={property} priority={index < 3} />
               ))}
             </div>
           </div>

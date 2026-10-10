@@ -6,8 +6,17 @@ import Link from "next/link";
 import { PublicProperty } from "@/lib/types";
 import { formatSizeRange } from "@/lib/format";
 import { PriceRangeDisplay } from "./price-display";
+import { propertyUrl } from "@/lib/slug";
 
-export function PropertyCard({ property, view = "grid" }: { property: PublicProperty; view?: "grid" | "list" }) {
+export function PropertyCard({
+  property,
+  view = "grid",
+  priority = false,
+}: {
+  property: PublicProperty;
+  view?: "grid" | "list";
+  priority?: boolean;
+}) {
   const [active, setActive] = useState(0);
   const sizeLabel = formatSizeRange(property.houseSizeSqftMin, property.houseSizeSqftMax, property.houseSizeSqft);
   const images = property.images;
@@ -37,6 +46,7 @@ export function PropertyCard({ property, view = "grid" }: { property: PublicProp
             src={images[active]}
             alt={property.title}
             fill
+            priority={priority}
             sizes={view === "grid" ? "(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" : "224px"}
             className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
@@ -75,7 +85,7 @@ export function PropertyCard({ property, view = "grid" }: { property: PublicProp
       {property.subLocation && <p className="text-xs text-stone">{property.subLocation}</p>}
       <div className={`flex items-center justify-between gap-3 border-black/10 ${view === "grid" ? "mt-auto border-t pt-3" : "mt-1"}`}>
         <span className="text-sm font-semibold text-ivory">
-          <PriceRangeDisplay min={property.priceMin} max={property.priceMax} single={property.price} currency={property.currency} />
+          <PriceRangeDisplay min={property.priceMin} max={property.priceMax} single={property.price} currency={property.currency} compact />
         </span>
         {sizeLabel && <span className="text-xs text-stone">{sizeLabel}</span>}
       </div>
@@ -85,7 +95,7 @@ export function PropertyCard({ property, view = "grid" }: { property: PublicProp
   if (view === "list") {
     return (
       <Link
-        href={`/properties/${property.id}`}
+        href={propertyUrl(property)}
         className="card-shine group flex overflow-hidden rounded-3xl border border-white/50 transition-all hover:border-gold/40"
       >
         {image}
@@ -96,7 +106,7 @@ export function PropertyCard({ property, view = "grid" }: { property: PublicProp
 
   return (
     <Link
-      href={`/properties/${property.id}`}
+      href={propertyUrl(property)}
       className="card-shine group flex flex-col overflow-hidden rounded-3xl border border-white/50 transition-all hover:-translate-y-1 hover:border-gold/40"
     >
       {image}

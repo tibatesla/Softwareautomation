@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://chestoneproperties.com";
+// Matches sitemap.ts -- www is the real served domain (bare domain 301s to it).
+const SITE_URL = "https://www.chestoneproperties.com";
 
 export default function robots(): MetadataRoute.Robots {
   return {
