@@ -1,14 +1,54 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProperty } from "@/lib/api";
+import type { Metadata } from "next";
+import { propertyUrl } from "@/lib/slug";
+import { resolveProperty } from "@/lib/resolve-property";
 import { formatSizeRange, whatsappEnquiryLink } from "@/lib/format";
 import { PropertyGallery } from "@/components/property-gallery";
 import { AmenitiesList } from "@/components/amenities-list";
 import { PriceRangeDisplay } from "@/components/price-display";
+import { PropertyCalculator } from "@/components/property-calculator";
+import { PropertyVideos } from "@/components/property-videos";
+import { PropertyVrTour } from "@/components/property-vr-tour";
+
+// Previously missing entirely -- every property page inherited the generic
+// site-wide title/description from the root layout, so all ~100+ listings
+// looked identical to search engines.
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const property = await resolveProperty(id);
+  if (!property) return {};
+
+  const location = [property.subLocation, property.location].filter(Boolean).join(", ");
+  const description =
+    property.description?.slice(0, 155) ||
+    `${property.unitType ?? "Property"} in ${location || "Nairobi"}. View pricing, sizes, and amenities.`;
+
+  const title = `${property.title} | Chestone Properties Ltd`;
+  const image = property.images[0];
+
+  return {
+    title,
+    description,
+    alternates: { canonical: propertyUrl(property) },
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      ...(image ? { images: [{ url: image }] } : {}),
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title,
+      description,
+      ...(image ? { images: [image] } : {}),
+    },
+  };
+}
 
 export default async function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const property = await getProperty(id).catch(() => null);
+  const property = await resolveProperty(id);
 
   if (!property) {
     notFound();
@@ -24,8 +64,48 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     { label: "Reference", value: property.referenceId },
   ].filter((f) => f.value !== null && f.value !== undefined);
 
+  const startingPrice = property.priceMin && Number(property.priceMin) > 0 ? property.priceMin : property.price;
+
+  const canonicalUrl = `https://www.chestoneproperties.com${propertyUrl(property)}`;
+  const listingJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Residence",
+    name: property.title,
+    description: property.description || `${property.unitType ?? "Property"} in ${property.location ?? "Nairobi"}`,
+    image: property.images,
+    url: canonicalUrl,
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: property.location ?? "Nairobi",
+      addressRegion: property.subLocation ?? undefined,
+      addressCountry: "KE",
+    },
+    ...(property.priceMin || property.price
+      ? {
+          offers: {
+            "@type": "Offer",
+            price: property.priceMin ?? property.price,
+            priceCurrency: property.currency,
+            availability: property.status === "available" ? "https://schema.org/InStock" : "https://schema.org/LimitedAvailability",
+            url: canonicalUrl,
+          },
+        }
+      : {}),
+  };
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://www.chestoneproperties.com" },
+      { "@type": "ListItem", position: 2, name: "Properties", item: "https://www.chestoneproperties.com/properties" },
+      { "@type": "ListItem", position: 3, name: property.title, item: canonicalUrl },
+    ],
+  };
+
   return (
     <div className="container-page py-12 md:py-16">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(listingJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       {/* Breadcrumb */}
       <nav className="flex flex-wrap items-center gap-2 text-xs text-stone">
         <Link href="/" className="hover:text-gold">
@@ -54,14 +134,6 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
             {property.subLocation ? ` — ${property.subLocation}` : ""}
           </span>
           <h1 className="mt-2 font-serif text-xl font-semibold text-ivory md:text-3xl">{property.title}</h1>
-          {property.developmentName && (
-            <Link
-              href={`/developments/${encodeURIComponent(property.developmentName)}`}
-              className="mt-2 inline-block text-xs font-medium text-stone underline-offset-4 hover:text-gold hover:underline"
-            >
-              Part of {property.developmentName} — view all unit types
-            </Link>
-          )}
         </div>
         {property.status === "reserved" && (
           <span className="rounded-full bg-onyx-light px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-ivory ring-1 ring-black/10">
@@ -78,6 +150,9 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
           Photos coming soon
         </div>
       )}
+
+      <PropertyVideos videos={property.videos} title={property.title} />
+      <PropertyVrTour urls={property.vrTourUrls} title={property.title} />
 
       <div className="mt-12 grid gap-12 lg:grid-cols-3">
         {/* Main content */}
@@ -126,6 +201,11 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
               </div>
             </>
           )}
+
+          <div className="gold-rule mt-8" />
+          <div className="mt-6">
+            <PropertyCalculator startingPrice={startingPrice} currency={property.currency} />
+          </div>
         </div>
 
         {/* Enquiry card */}

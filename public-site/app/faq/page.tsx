@@ -3,10 +3,16 @@ import Link from "next/link";
 import { FOCUS_AREAS } from "@/lib/types";
 import { whatsappGeneralEnquiryLink } from "@/lib/format";
 
+const title = "FAQ | Chestone Properties";
+const description =
+  "Answers to common questions about browsing, enquiring, and reserving a property with Chestone Properties in Nairobi.";
+
 export const metadata: Metadata = {
-  title: "FAQ | Chestone Properties",
-  description:
-    "Answers to common questions about browsing, enquiring, and reserving a property with Chestone Properties in Nairobi.",
+  title,
+  description,
+  alternates: { canonical: "/faq" },
+  openGraph: { title, description, type: "website" },
+  twitter: { card: "summary", title, description },
 };
 
 const FAQS: { question: string; answer: string }[] = [
@@ -54,13 +60,48 @@ const FAQS: { question: string; answer: string }[] = [
     answer:
       "Message us on WhatsApp any time, or email info@chestoneproperties.com. A real person from the Chestone team will respond, not an automated queue.",
   },
+  {
+    question: "Do you work with diaspora buyers?",
+    answer:
+      "Yes. Many of our clients purchase remotely from abroad — your consultant handles viewings, reservation, and paperwork over WhatsApp and video call, with title deed processing and the required legal procedures handled on your behalf.",
+  },
+  {
+    question: "What size apartments do you have available?",
+    answer:
+      "Our listings range from studios to 5-bedroom units across Karen, Lavington, Runda, Westlands, Kilimani, Kileleshwa, and Riverside Drive. Each property page states its exact size in square feet.",
+  },
+  {
+    question: "Do you charge buyers any fees?",
+    answer:
+    "No our services to buyers are free",
+  },
+  {
+    question: "Can I view a property virtually if I'm not in Nairobi?",
+    answer:
+      "Yes — your consultant can arrange a live video walkthrough of any listing, the same way we do in-person viewings.",
+  },
 ];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQS.map((faq) => ({
+    "@type": "Question",
+    name: faq.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: faq.answer,
+    },
+  })),
+};
 
 export default function FaqPage() {
   return (
     <div>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       <section className="border-b border-black/10 bg-onyx-light">
-        <div className="container-page flex flex-col items-center gap-4 py-16 text-center md:py-24">
+      
+      <div className="container-page flex flex-col items-center gap-4 py-16 text-center md:py-24">
           <span className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Support</span>
           <h1 className="font-serif text-3xl font-semibold text-ivory md:text-5xl">Frequently Asked Questions</h1>
           <p className="max-w-xl text-sm text-stone md:text-base">

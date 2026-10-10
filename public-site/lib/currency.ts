@@ -43,3 +43,13 @@ export function formatAmount(amount: number, currency: DisplayCurrency): string 
     maximumFractionDigits: 0,
   }).format(amount);
 }
+
+export function formatAmountCompact(amount: number, currency: DisplayCurrency): string {
+  if (!amount) return "Price on request";
+  return new Intl.NumberFormat(currency === "USD" ? "en-US" : "en-KE", {
+    style: "currency",
+    currency,
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(amount);
+}

@@ -5,7 +5,8 @@ import { FOCUS_AREAS } from "@/lib/types";
 const SOCIAL_LINKS = [
   {
     name: "Instagram",
-    href: "https://www.instagram.com/chestoneproperties_ke?igsh=MWN4cmw3Ymlzc244cg==",
+    href: "https://www.instagram.com/chestonepropertiesltd?stkn=MWN4cmw3Ymlzc244cg==",
+    bg: "linear-gradient(45deg, #f9ce34, #ee2a7b, #6228d7)",
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
         <rect x="3" y="3" width="18" height="18" rx="5" />
@@ -17,6 +18,7 @@ const SOCIAL_LINKS = [
   {
     name: "Facebook",
     href: "https://www.facebook.com/share/1Lv4EMcTP2/",
+    bg: "#1877F2",
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
         <path d="M13.5 21v-7.5h2.5l.5-3h-3V8.3c0-.87.24-1.46 1.5-1.46H16.6V4.14C16.33 4.1 15.4 4 14.32 4c-2.24 0-3.77 1.37-3.77 3.88V10.5H8v3h2.55V21h2.95Z" />
@@ -26,9 +28,20 @@ const SOCIAL_LINKS = [
   {
     name: "TikTok",
     href: "https://www.tiktok.com/@chestone2026?_r=1&_t=ZS-98DW1HJwXXI",
+    bg: "#000000",
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
         <path d="M16.5 3c.34 1.96 1.7 3.5 3.5 3.9v2.9c-1.32-.02-2.55-.42-3.5-1.08v6.53c0 3.2-2.6 5.75-5.75 5.75S5 18.45 5 15.25 7.6 9.5 10.75 9.5c.3 0 .6.02.88.07v3.02a2.75 2.75 0 1 0 1.95 2.63V3h2.92Z" />
+      </svg>
+    ),
+  },
+  {
+    name: "YouTube",
+    href: "https://youtube.com/@chestoneproperties?si=0ac7NoCnOaHLFWKu",
+    bg: "#FF0000",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff">
+        <path d="M9.5 16.5v-9l8 4.5-8 4.5Z" />
       </svg>
     ),
   },
@@ -55,7 +68,7 @@ export function SiteFooter() {
             {FOCUS_AREAS.map((area) => (
               <li key={area}>
                 <Link
-                  href={`/properties?area=${encodeURIComponent(area)}`}
+                  href={`/areas/${encodeURIComponent(area)}`}
                   className="text-sm text-stone transition-colors hover:text-gold"
                 >
                   {area}
@@ -81,7 +94,7 @@ export function SiteFooter() {
                 info@chestoneproperties.com
               </a>
             </li>
-            <li>Nairobi, Kenya</li>
+            <li>Marsabit Plaza, Ngong Road, Nairobi</li>
             <li>
               <Link href="/properties" className="transition-colors hover:text-gold">
                 Browse all listings →
@@ -94,16 +107,16 @@ export function SiteFooter() {
             </li>
           </ul>
 
-          <div className="mt-5 flex items-center gap-3">
-            {SOCIAL_LINKS.map((social) => (
+                    <div className="mt-5 flex items-center gap-3">
+                        {SOCIAL_LINKS.map((social) => (
               <a
                 key={social.name}
                 href={social.href}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={social.name}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/5 text-stone transition-colors hover:bg-gold hover:text-ivory"
-              >
+                style={{ background: social.bg }}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-white transition-transform hover:scale-110"    >
                 {social.icon}
               </a>
             ))}

@@ -3,13 +3,12 @@
 import { useState } from "react";
 
 /**
- * Wraps the Type/Price/Size/Project filter rows -- stacking all four rows
- * plus Area and Sort/View made a visitor scroll (or, on desktop, just
- * stare) past a wall of pills before seeing a single listing. Collapsed
- * behind a "Filters" toggle on every screen size now -- this used to force
- * itself open on desktop, but the same clutter the client flagged on
- * mobile turned out to look just as busy on a wide screen with ~30
- * developments in the Project row.
+ * Wraps the Type/Price/Size filter rows -- stacking all three rows plus
+ * Area and Sort/View made a visitor scroll (or, on desktop, just stare)
+ * past a wall of pills before seeing a single listing. Collapsed behind a
+ * "Filters" toggle on every screen size now -- this used to force itself
+ * open on desktop, but the same clutter the client flagged on mobile
+ * turned out to look just as busy on a wide screen too.
  */
 export function CollapsibleFilters({ activeCount, children }: { activeCount: number; children: React.ReactNode }) {
   const [expanded, setExpanded] = useState(false);

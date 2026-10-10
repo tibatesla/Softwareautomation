@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { MobileNav } from "./mobile-nav";
 import { CurrencyToggle } from "./currency-toggle";
+import { SiteSearch } from "./site-search";
 
 export function SiteHeader() {
   return (
@@ -41,6 +42,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
+          <SiteSearch />
           <CurrencyToggle />
           <Link
             href="/properties"

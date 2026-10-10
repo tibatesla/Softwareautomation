@@ -2,22 +2,61 @@ import Link from "next/link";
 import { getProperties } from "@/lib/api";
 import { PropertyCard } from "@/components/property-card";
 import { CollapsibleFilters } from "@/components/collapsible-filters";
+import { PropertySearchBox } from "@/components/property-search-box";
 import { FOCUS_AREAS, UNIT_TYPES, PRICE_BANDS, SIZE_BANDS, SORT_OPTIONS } from "@/lib/types";
-
-export const metadata = {
-  title: "Properties | Chestone Properties Ltd",
-  description: "Browse available properties in Kilimani, Kileleshwa, Westlands, Lavington, Karen, Riverside Drive, and Runda.",
-};
+import { NEIGHBORHOODS } from "@/lib/neighborhoods";
+import type { Metadata } from "next";
 
 type RawSearchParams = {
   area?: string;
   type?: string;
   price?: string;
   size?: string;
-  development?: string;
   sort?: string;
+  q?: string;
   view?: string;
+  maxPrice?: string;
 };
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  const neighborhood = NEIGHBORHOODS.find(
+    (n) => n.areaParam.toLowerCase() === params.area?.toLowerCase()
+  );
+
+  if (!neighborhood) {
+    const title = "Properties | Chestone Properties Ltd";
+    const description = "Browse available properties in Karen, Lavington, Runda, Westlands, Kilimani, Kileleshwa, and Riverside Drive.";
+    return {
+      title,
+      description,
+      // This route also serves filtered views via query params (?area=, ?type=,
+      // etc.) -- canonicalizing every variant back to the plain /properties URL
+      // avoids Google treating each filter combination as separate/duplicate
+      // content.
+      alternates: { canonical: "/properties" },
+      openGraph: { title, description, type: "website" },
+      twitter: { card: "summary", title, description },
+    };
+  }
+
+  const title = `${neighborhood.name} Properties — Filter by Price & Size | Chestone Properties`;
+  const description = `Filter and compare current ${neighborhood.name} listings by price, size, and unit type. ${neighborhood.fitFor[0]} — verified availability with direct WhatsApp advisory.`;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: `/areas/${neighborhood.areaParam}`,
+    },
+    openGraph: { title, description, type: "website" },
+    twitter: { card: "summary", title, description },
+  };
+}
 
 // Builds a /properties URL carrying every currently-active filter plus one
 // override -- so switching e.g. price band never resets area/type/sort.
@@ -28,9 +67,10 @@ function buildHref(current: RawSearchParams, override: RawSearchParams): string 
   if (merged.type) params.set("type", merged.type);
   if (merged.price) params.set("price", merged.price);
   if (merged.size) params.set("size", merged.size);
-  if (merged.development) params.set("development", merged.development);
   if (merged.sort) params.set("sort", merged.sort);
   if (merged.view) params.set("view", merged.view);
+  if (merged.q) params.set("q", merged.q);
+  if (merged.maxPrice) params.set("maxPrice", merged.maxPrice);
   const qs = params.toString();
   return qs ? `/properties?${qs}` : "/properties";
 }
@@ -42,42 +82,64 @@ export default async function PropertiesPage({
 }) {
   const params = await searchParams;
   const activeArea = FOCUS_AREAS.find((a) => a.toLowerCase() === params.area?.toLowerCase());
+  const activeNeighborhood = activeArea ? NEIGHBORHOODS.find((n) => n.areaParam === activeArea) : null;
   const activeType = UNIT_TYPES.find((t) => t.toLowerCase() === params.type?.toLowerCase());
   const activePriceBand = PRICE_BANDS.find((b) => b.value === params.price);
   const activeSizeBand = SIZE_BANDS.find((b) => b.value === params.size);
   const activeSort = SORT_OPTIONS.find((s) => s.value === params.sort);
   const view = params.view === "list" ? "list" : "grid";
 
-  // Fetched unfiltered, purely to derive the full list of developments to
-  // offer as filter options -- so the facet list never narrows itself away
-  // as other filters get applied (same UX PRICE_BANDS/SIZE_BANDS give,
-  // since those are fixed; this one has to be derived from real data).
-  const [properties, allProperties] = await Promise.all([
-    getProperties({
-      area: activeArea,
-      type: activeType,
-      price: activePriceBand?.value,
-      size: activeSizeBand?.value,
-      development: params.development,
-      sort: activeSort?.value,
-    }).catch(() => []),
-    getProperties().catch(() => []),
-  ]);
-
-  const developments = [...new Set(allProperties.map((p) => p.developmentName).filter((d): d is string => Boolean(d)))].sort();
-  const activeDevelopment = developments.find((d) => d.toLowerCase() === params.development?.toLowerCase());
+  const properties = await getProperties({
+    area: activeArea,
+    type: activeType,
+    price: activePriceBand?.value,
+    size: activeSizeBand?.value,
+    sort: activeSort?.value,
+    q: params.q,
+    maxPrice: params.maxPrice,
+  }).catch(() => []);
 
   return (
     <div className="container-page py-16 md:py-20">
       <div className="max-w-2xl">
         <span className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Listings</span>
         <h1 className="mt-3 font-serif text-4xl font-semibold text-ivory">
-          {activeArea ? `Properties in ${activeArea}` : "All Properties"}
+          {params.q
+            ? `Results for "${params.q}"`
+            : params.maxPrice
+              ? "Properties Within Your Budget"
+              : activeArea
+                ? `Properties in ${activeArea}`
+                : "All Properties"}
         </h1>
         <p className="mt-3 text-sm text-stone">
           {properties.length} {properties.length === 1 ? "property" : "properties"} available
           {activeArea ? ` in ${activeArea}` : " across our focus areas"}.
         </p>
+        {params.maxPrice && Number(params.maxPrice) > 0 && (
+          <p className="mt-1 text-sm text-stone">
+            Up to{" "}
+            <span className="font-semibold text-gold">
+              {new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(
+                Number(params.maxPrice),
+              )}
+            </span>
+            .{" "}
+            <Link href={buildHref(params, { maxPrice: undefined })} className="underline underline-offset-4 hover:text-ivory">
+              Clear
+            </Link>
+          </p>
+        )}
+        {activeNeighborhood && (
+          <p className="mt-3 text-sm text-stone">
+            Best for: {activeNeighborhood.fitFor.join(", ")}.{" "}
+            <Link href={`/areas/${activeNeighborhood.areaParam}`} className="underline underline-offset-4 hover:text-gold">
+              Read the full {activeNeighborhood.name} area guide
+            </Link>
+            .
+          </p>
+        )}
+        <PropertySearchBox currentParams={params} />
       </div>
 
       {/* Area filter pills */}
@@ -104,7 +166,7 @@ export default async function PropertiesPage({
       </div>
 
       <CollapsibleFilters
-        activeCount={[activeType, activePriceBand, activeSizeBand, activeDevelopment].filter(Boolean).length}
+        activeCount={[activeType, activePriceBand, activeSizeBand].filter(Boolean).length}
       >
         {/* Type filter pills */}
         <div className="scroll-pills -mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
@@ -178,33 +240,6 @@ export default async function PropertiesPage({
         ))}
       </div>
 
-      {/* Development/project pills -- "Any" clears the filter on this list
-          as before; each named development instead links straight to its
-          own dedicated project page (see app/developments/[name]), since
-          that's a richer view than a flat filtered list -- one combined
-          gallery, aggregate pricing, and every unit type in one place. */}
-        {developments.length > 0 && (
-        <div className="scroll-pills -mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
-          <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-stone">Project:</span>
-          <Link
-            href={buildHref(params, { development: undefined })}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              !activeDevelopment ? "bg-gold text-ivory" : "bg-onyx-light text-stone ring-1 ring-black/10 hover:ring-gold/40"
-            }`}
-          >
-            Any
-          </Link>
-          {developments.map((d) => (
-            <Link
-              key={d}
-              href={`/developments/${encodeURIComponent(d)}`}
-              className="shrink-0 rounded-full bg-onyx-light px-3 py-1.5 text-xs font-medium text-stone ring-1 ring-black/10 transition-colors hover:ring-gold/40"
-            >
-              {d}
-            </Link>
-          ))}
-        </div>
-        )}
       </CollapsibleFilters>
 
       {/* Sort + view toggle */}
@@ -262,8 +297,8 @@ export default async function PropertiesPage({
       {/* Results */}
       {properties.length > 0 ? (
         <div className={view === "grid" ? "mt-12 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3" : "mt-12 flex flex-col gap-4"}>
-          {properties.map((property) => (
-            <PropertyCard key={property.id} property={property} view={view} />
+          {properties.map((property, index) => (
+            <PropertyCard key={property.id} property={property} view={view} priority={index < 3} />
           ))}
         </div>
       ) : (

@@ -25,15 +25,15 @@ export interface PublicProperty {
   houseSizeSqft: string | null;
   houseSizeSqftMin: string | null;
   houseSizeSqftMax: string | null;
-  developmentName: string | null;
   amenities: string[];
   outstandingAmenities: string[];
   images: string[];
   videos: string[];
+  vrTourUrls: string[];
   createdAt: string;
 }
 
-export const FOCUS_AREAS = ["Kilimani", "Kileleshwa", "Westlands", "Lavington", "Karen", "Riverside", "Runda"] as const;
+export const FOCUS_AREAS = ["Karen", "Lavington", "Runda", "Westlands", "Kilimani", "Kileleshwa", "Riverside"] as const;
 export type FocusArea = (typeof FOCUS_AREAS)[number];
 
 export const UNIT_TYPES = ["Apartment", "Villa", "Townhouse"] as const;
