@@ -61,11 +61,11 @@ const PUBLIC_PROPERTY_SELECT = {
   houseSizeSqft: true,
   houseSizeSqftMin: true,
   houseSizeSqftMax: true,
-  developmentName: true,
   amenities: true,
   outstandingAmenities: true,
   images: true,
   videos: true,
+  vrTourUrls: true,
   createdAt: true,
 } satisfies Prisma.PropertySelect;
 
@@ -111,6 +111,18 @@ const priceBandFilter = (band: PublicPriceBand): Prisma.PropertyWhereInput => {
   return { OR: [flatPriceInBand, rangedPriceInBand] };
 };
 
+// Overlap check against an arbitrary user-supplied ceiling (the homepage
+// "Buy Within Your Budget" box) -- same flat/ranged split as priceBandFilter,
+// just with only a max and no fixed bands to pick from.
+const maxPriceFilter = (max: number): Prisma.PropertyWhereInput => {
+  const flatPriceUnderMax: Prisma.PropertyWhereInput = { price: { gt: 0, lte: max } };
+  const rangedPriceUnderMax: Prisma.PropertyWhereInput = {
+    price: 0,
+    OR: [{ priceMin: null }, { priceMin: { lte: max } }],
+  };
+  return { OR: [flatPriceUnderMax, rangedPriceUnderMax] };
+};
+
 // Same overlap logic as priceBandFilter above, but for house_size_sqft --
 // a property with no size data at all never matches any band (there's no
 // "flat" fallback like price=0 to distinguish "unset" from "ranged").
@@ -142,8 +154,9 @@ interface PublicListingQuery {
   type?: string;
   price?: string;
   size?: string;
-  development?: string;
   sort?: string;
+  q?: string;
+  maxPrice?: string;
 }
 
 const buildWhere = (query: PublicListingQuery): Prisma.PropertyWhereInput => {
@@ -171,8 +184,28 @@ const buildWhere = (query: PublicListingQuery): Prisma.PropertyWhereInput => {
     (where.AND as Prisma.PropertyWhereInput[]).push(sizeBandFilter(sizeBand));
   }
 
-  if (query.development) {
-    (where.AND as Prisma.PropertyWhereInput[]).push({ developmentName: { equals: query.development, mode: 'insensitive' } });
+  const maxPrice = query.maxPrice ? Number(query.maxPrice) : undefined;
+  if (maxPrice && maxPrice > 0) {
+    (where.AND as Prisma.PropertyWhereInput[]).push(maxPriceFilter(maxPrice));
+  }
+
+  // Free-text search box on the public site -- matches across every field
+  // a visitor might plausibly type: the listing/unit name, location, or a
+  // reference code copied from a brochure/ad. Deliberately excludes
+  // developmentName: that field is frequently a developer/company name in
+  // this dataset, and the client doesn't want developer identity
+  // discoverable via the public site, not even indirectly through search.
+  const q = query.q?.trim();
+  if (q) {
+    (where.AND as Prisma.PropertyWhereInput[]).push({
+      OR: [
+        { title: { contains: q, mode: 'insensitive' } },
+        { location: { contains: q, mode: 'insensitive' } },
+        { subLocation: { contains: q, mode: 'insensitive' } },
+        { unitType: { contains: q, mode: 'insensitive' } },
+        { referenceId: { contains: q, mode: 'insensitive' } },
+      ],
+    });
   }
 
   return where;
@@ -184,8 +217,9 @@ export const listPublicProperties = async (req: Request, res: Response): Promise
     type: typeof req.query.type === 'string' ? req.query.type : undefined,
     price: typeof req.query.price === 'string' ? req.query.price : undefined,
     size: typeof req.query.size === 'string' ? req.query.size : undefined,
-    development: typeof req.query.development === 'string' ? req.query.development : undefined,
     sort: typeof req.query.sort === 'string' ? req.query.sort : undefined,
+    q: typeof req.query.q === 'string' ? req.query.q : undefined,
+    maxPrice: typeof req.query.maxPrice === 'string' ? req.query.maxPrice : undefined,
   };
 
   let properties = await withSystemContext((tx) =>

@@ -3,7 +3,7 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { withRLSContext, withSystemContext, AppRole } from '../config/database';
 import { Prisma } from '../../generated/prisma';
-import { createLeadSchema, updateLeadSchema, sendLeadMessageSchema, bulkDeleteSchema } from '../schemas/lead.schema';
+import { createLeadSchema, updateLeadSchema, sendLeadMessageSchema, bulkDeleteSchema, assignLeadSchema } from '../schemas/lead.schema';
 import { sendWhatsAppText, WhatsAppSendError, WHATSAPP_REENGAGEMENT_WINDOW_CLOSED_CODE } from '../services/whatsapp-cloud-api.service';
 
 interface UnreadRow {
@@ -302,5 +302,49 @@ export const claimLead = async (req: AuthenticatedRequest, res: Response): Promi
     res.status(200).json(lead);
   } catch {
     res.status(409).json({ error: 'Lead is not available to claim (already claimed, not qualified, or does not exist)' });
+  }
+};
+
+/**
+ * Owner/Admin manually assigns (or reassigns, if already claimed by someone
+ * else) a lead to a specific agent -- unlike claimLead, there's no
+ * qualification-status or unclaimed-only restriction here; the
+ * leads_owner_admin_all RLS policy already grants owner/admin unrestricted
+ * UPDATE on any lead, so this is deliberately a plain override.
+ *
+ * Also bumps the target agent's lastLeadAssignedAt, same as the SLA
+ * cron's own auto-assign step (agent-sla.service.ts) -- otherwise a
+ * manually-assigned agent would look stale in the round-robin queue and
+ * get double-loaded by the next automatic pass.
+ */
+export const assignLead = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const parseResult = assignLeadSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Malformed assignment payload', details: parseResult.error.errors });
+    return;
+  }
+
+  const { id, role } = req.user!;
+  const { agentId } = parseResult.data;
+
+  const targetAgent = await withRLSContext(id, role, (tx) => tx.user.findUnique({ where: { id: agentId } }));
+  if (!targetAgent || targetAgent.role !== 'agent' || !targetAgent.isActive) {
+    res.status(400).json({ error: 'agentId must reference an active agent' });
+    return;
+  }
+
+  try {
+    const now = new Date();
+    // Both updates run inside the single transaction withRLSContext already
+    // opens -- no nested $transaction needed (Prisma.TransactionClient
+    // doesn't support that), this is already atomic as written.
+    const lead = await withRLSContext(id, role, async (tx) => {
+      const updated = await tx.lead.update({ where: { id: req.params.id }, data: { claimedByAgentId: agentId, claimedAt: now } });
+      await tx.user.update({ where: { id: agentId }, data: { lastLeadAssignedAt: now } });
+      return updated;
+    });
+    res.status(200).json(lead);
+  } catch {
+    res.status(404).json({ error: 'Lead not found' });
   }
 };

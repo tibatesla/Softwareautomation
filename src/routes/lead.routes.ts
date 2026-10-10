@@ -10,6 +10,7 @@ import {
   deleteLead,
   bulkDeleteLeads,
   claimLead,
+  assignLead,
   listLeadMessages,
   sendLeadMessage,
   markLeadRead,
@@ -43,5 +44,8 @@ router.post('/bulk-delete', requireRole('owner', 'admin'), bulkDeleteLeads);
 
 // Speed-to-lead claim: Agent only.
 router.post('/:id/claim', requireRole('agent'), claimLead);
+
+// Manual (re)assignment to a specific agent: Owner/Admin only.
+router.post('/:id/assign', requireRole('owner', 'admin'), assignLead);
 
 export default router;

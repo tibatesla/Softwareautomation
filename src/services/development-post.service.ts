@@ -118,7 +118,7 @@ const unitLabel = (title: string, unitType: string | null, developmentName: stri
 };
 
 const formatPrice = (p: ListingForPost): string => {
-  const fmt = (n: number) => new Intl.NumberFormat('en-KE', { style: 'currency', currency: p.currency, maximumFractionDigits: 0 }).format(n);
+  const fmt = (n: number) => new Intl.NumberFormat('en-KE', { style: 'currency', currency: p.currency, notation: 'compact', maximumFractionDigits: 1 }).format(n);
   if (p.priceMin && p.priceMax) return `${fmt(p.priceMin)} – ${fmt(p.priceMax)}`;
   if (p.price > 0) return fmt(p.price);
   if (p.priceMin) return fmt(p.priceMin);

@@ -48,6 +48,9 @@ const propertyFormSchema = z.object({
   amenities: z.array(z.string()).optional(),
   outstandingAmenities: z.array(z.string()).optional(),
   subLocation: z.string().optional(),
+  // One URL per line in the textarea -- converted to string[] on submit,
+  // same way the numeric fields above convert their raw input value.
+  vrTourUrls: z.string().optional(),
 });
 
 type PropertyFormValues = z.infer<typeof propertyFormSchema>;
@@ -56,6 +59,14 @@ function toNumber(value: string | number | undefined): number | undefined {
   if (value === undefined || value === "") return undefined;
   const num = Number(value);
   return Number.isNaN(num) ? undefined : num;
+}
+
+function toUrlList(value: string | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  return value
+    .split("\n")
+    .map((url) => url.trim())
+    .filter(Boolean);
 }
 
 function toDefaultValues(property?: Property): Partial<PropertyFormValues> {
@@ -88,6 +99,7 @@ function toDefaultValues(property?: Property): Partial<PropertyFormValues> {
     amenities: property.amenities,
     outstandingAmenities: property.outstandingAmenities,
     subLocation: property.subLocation ?? "",
+    vrTourUrls: property.vrTourUrls?.join("\n") ?? "",
   };
 }
 
@@ -139,6 +151,7 @@ export function PropertyForm({ property }: { property?: Property }) {
       assignedAgentId: values.assignedAgentId || undefined,
       developerEmail: values.developerEmail || undefined,
       referenceId: values.referenceId || undefined,
+      vrTourUrls: toUrlList(values.vrTourUrls),
     };
 
     try {
@@ -336,6 +349,18 @@ export function PropertyForm({ property }: { property?: Property }) {
         <div className="flex flex-col gap-2 sm:col-span-4">
           <Label htmlFor="paymentPlanStructure">Payment plan structure</Label>
           <Textarea id="paymentPlanStructure" rows={2} {...register("paymentPlanStructure")} />
+        </div>
+        <div className="flex flex-col gap-2 sm:col-span-4">
+          <Label htmlFor="vrTourUrls">VR tour links</Label>
+          <Textarea
+            id="vrTourUrls"
+            rows={3}
+            placeholder={"One link per line, e.g.\nhttps://vr.justeasy.cn/view/..."}
+            {...register("vrTourUrls")}
+          />
+          <p className="text-xs text-muted-foreground">
+            One URL per line. Shown on the public site as a &quot;Virtual Tour&quot; link below the photos.
+          </p>
         </div>
       </section>
 

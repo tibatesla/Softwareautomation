@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import { LEAD_QUALIFICATION_COLOR } from "@/lib/status-colors";
 import { BackButton } from "@/components/back-button";
+import { LeadAssignSelect } from "@/components/leads/lead-assign-select";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -95,6 +96,12 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <section className="grid grid-cols-2 gap-4 rounded-lg border p-4 sm:grid-cols-4">
+        {canManage && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-muted-foreground">Assigned agent</span>
+            <LeadAssignSelect lead={lead} />
+          </div>
+        )}
         <Field label="Email" value={lead.email} />
         <Field label="Source" value={lead.source} />
         <Field label="Property" value={property?.title} />

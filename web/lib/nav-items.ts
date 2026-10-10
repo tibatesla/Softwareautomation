@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Building2, Contact, CalendarDays, Wallet, LineChart, Trophy, UserCog } from "lucide-react";
+import { LayoutDashboard, Building2, Contact, CalendarDays, Wallet, LineChart, Trophy, UserCog, Megaphone } from "lucide-react";
 import type { UserRole } from "@/lib/types";
 
 export interface NavItem {
@@ -45,6 +45,13 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["owner", "admin", "agent"],
     icon: Wallet,
     iconClassName: "text-emerald-400",
+  },
+  {
+    href: "/communications",
+    label: "Communications",
+    roles: ["owner", "admin"],
+    icon: Megaphone,
+    iconClassName: "text-orange-400",
   },
   {
     href: "/ad-performance",

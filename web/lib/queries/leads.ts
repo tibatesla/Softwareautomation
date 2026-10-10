@@ -105,3 +105,17 @@ export function useClaimLead() {
     },
   });
 }
+
+// Owner/Admin manual (re)assignment to a specific agent -- distinct from
+// claim, which is an agent taking an unclaimed lead for themselves.
+export function useAssignLead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, agentId }: { id: string; agentId: string }) =>
+      apiFetch<Lead>(`/leads/${id}/assign`, { method: "POST", body: JSON.stringify({ agentId }) }),
+    onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: leadsKey });
+      queryClient.invalidateQueries({ queryKey: leadKey(id) });
+    },
+  });
+}

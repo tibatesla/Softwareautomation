@@ -106,6 +106,26 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
         <Field label="Payment plan" value={property.paymentPlanStructure} />
       </section>
 
+      {property.vrTourUrls.length > 0 && (
+        <section className="flex flex-col gap-2 rounded-lg border p-4">
+          <h2 className="text-lg font-medium">VR Tours</h2>
+          <div className="flex flex-col gap-1">
+            {property.vrTourUrls.map((url, i) => (
+              <a
+                key={url}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-primary hover:underline"
+              >
+                {property.vrTourUrls.length > 1 ? `Tour ${i + 1}: ` : ""}
+                {url}
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
       {(property.developerContactName || property.developerEmail || property.developerPhone) && (
         <section className="flex flex-col gap-3 rounded-lg border p-4">
           <h2 className="text-lg font-medium">Developer Liaison Contact</h2>
