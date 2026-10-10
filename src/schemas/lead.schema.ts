@@ -59,6 +59,10 @@ export const bulkDeleteSchema = z.object({
   ids: z.array(z.string().uuid()).min(1),
 });
 
+export const assignLeadSchema = z.object({
+  agentId: z.string().uuid(),
+});
+
 export type CreateLeadPayload = z.infer<typeof createLeadSchema>;
 export type UpdateLeadPayload = z.infer<typeof updateLeadSchema>;
 export type SendLeadMessagePayload = z.infer<typeof sendLeadMessageSchema>;

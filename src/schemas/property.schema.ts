@@ -106,6 +106,7 @@ export const createPropertySchema = z.object({
   subLocation: z.string().optional(),
   images: z.array(z.string().url()).optional(), // any number, from any CDN (Cloudinary or otherwise)
   videos: z.array(z.string().url()).optional(), // any number, from any CDN (Cloudinary or otherwise)
+  vrTourUrls: z.array(z.string().url()).optional(), // externally-hosted VR/360 tour links (e.g. vr.justeasy.cn), not a Chestone upload
 });
 
 export const updatePropertySchema = createPropertySchema.partial();

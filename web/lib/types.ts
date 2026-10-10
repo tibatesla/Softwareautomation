@@ -218,5 +218,6 @@ export interface Property {
   subLocation: string | null;
   images: string[];
   videos: string[];
+  vrTourUrls: string[];
   socialPostedAt: string | null;
 }

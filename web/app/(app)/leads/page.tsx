@@ -15,6 +15,7 @@ import { StatCard } from "@/components/stat-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ApiError } from "@/lib/api";
 import { ReportDownloadMenu } from "@/components/report-download-menu";
+import { LeadAssignSelect } from "@/components/leads/lead-assign-select";
 import { LEAD_QUALIFICATION_COLOR } from "@/lib/status-colors";
 import { cn } from "@/lib/utils";
 
@@ -162,6 +163,7 @@ export default function LeadsPage() {
                 <TableHead>Deal stage</TableHead>
                 <TableHead>Segment</TableHead>
                 <TableHead>Last activity</TableHead>
+                {canCreate && <TableHead>Agent</TableHead>}
                 <TableHead />
               </TableRow>
             </TableHeader>
@@ -200,6 +202,11 @@ export default function LeadsPage() {
                     <TableCell className="text-muted-foreground">
                       {lead.lastMessageAt ? new Date(lead.lastMessageAt).toLocaleString() : "—"}
                     </TableCell>
+                    {canCreate && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <LeadAssignSelect lead={lead} />
+                      </TableCell>
+                    )}
                     <TableCell>
                       {user?.role === "agent" && isUnclaimed && (
                         <Button size="sm" onClick={(e) => handleClaim(e, lead.id)} disabled={claimLead.isPending}>
@@ -212,7 +219,7 @@ export default function LeadsPage() {
               })}
               {sortedLeads.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={canCreate ? 8 : 7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={canCreate ? 9 : 7} className="text-center text-muted-foreground">
                     No leads yet.
                   </TableCell>
                 </TableRow>

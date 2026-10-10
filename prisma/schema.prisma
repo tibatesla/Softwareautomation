@@ -58,15 +58,16 @@ model Property {
   view                 String?
   paymentPlanStructure String?        @map("payment_plan_structure")
   houseSizeSqft        Decimal?       @map("house_size_sqft") @db.Decimal(10, 2)
-  houseSizeSqftMin     Decimal?       @map("house_size_sqft_min") @db.Decimal(10, 2)
-  houseSizeSqftMax     Decimal?       @map("house_size_sqft_max") @db.Decimal(10, 2)
-  developmentName      String?        @map("development_name")
   amenities            String[]       @default([])
-  outstandingAmenities String[]       @default([]) @map("outstanding_amenities")
   subLocation          String?        @map("sub_location")
   images               String[]       @default([])
   videos               String[]       @default([])
+  houseSizeSqftMin     Decimal?       @map("house_size_sqft_min") @db.Decimal(10, 2)
+  houseSizeSqftMax     Decimal?       @map("house_size_sqft_max") @db.Decimal(10, 2)
+  developmentName      String?        @map("development_name")
   socialPostedAt       DateTime?      @map("social_posted_at") @db.Timestamptz(6)
+  outstandingAmenities String[]       @default([]) @map("outstanding_amenities")
+  vrTourUrls           String[]       @default([]) @map("vr_tour_urls")
   bookings             Booking[]
   leads                Lead[]
   payments             Payment[]
@@ -75,6 +76,7 @@ model Property {
 
   @@index([assignedAgentId], map: "idx_properties_assigned_agent")
   @@index([status], map: "idx_properties_status")
+  @@index([developmentName], map: "idx_properties_development_name", where: raw("(development_name IS NOT NULL)"))
   @@map("properties")
 }
 
@@ -111,7 +113,7 @@ model Lead {
   lastMessageAt        DateTime?               @map("last_message_at") @db.Timestamptz(6)
   visitPreference      String?                 @map("visit_preference")
   awaitingBookingReply Boolean                 @default(false) @map("awaiting_booking_reply")
-  bookingToken         String?                 @unique @map("booking_token")
+  bookingToken         String?                 @unique(map: "idx_leads_booking_token", where: raw("(booking_token IS NOT NULL)")) @map("booking_token")
   agentPenalties       AgentPenalty[]
   bookings             Booking[]
   messages             LeadMessage[]
