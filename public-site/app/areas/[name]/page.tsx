@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { getProperties } from "@/lib/api";
 import { FOCUS_AREAS, type FocusArea } from "@/lib/types";
 import { PropertyCard } from "@/components/property-card";
-import { availableTypes } from "@/lib/landing-pages";
+import { availableTypes, areaHeadline } from "@/lib/landing-pages";
 
 type Params = Promise<{ name: string }>;
 
@@ -91,7 +91,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const area = matchArea(name);
   if (!area) return {};
 
-  const title = `Apartments & Homes for Sale in ${area}, Nairobi | Chestone Properties`;
+  const title = `${areaHeadline(area)}${area === "Karen" ? " | Ostrea Karen Villas" : " | Chestone Properties"}`;
   const description = AREA_COPY[area].slice(0, 155);
   const properties = await getProperties({ area }).catch(() => []);
   const image = properties.find((p) => p.images.length > 0)?.images[0];
@@ -164,7 +164,7 @@ export default async function AreaPage({ params }: { params: Params }) {
     "@type": "BreadcrumbList",
     itemListElement: [
       { "@type": "ListItem", position: 1, name: "Home", item: "https://www.chestoneproperties.com" },
-      { "@type": "ListItem", position: 2, name: "Properties", item: "https://www.chestoneproperties.com/properties" },
+      { "@type": "ListItem", position: 2, name: "All Properties", item: "https://www.chestoneproperties.com/properties" },
       { "@type": "ListItem", position: 3, name: area, item: canonicalUrl },
     ],
   };
@@ -174,7 +174,7 @@ export default async function AreaPage({ params }: { params: Params }) {
   const placeJsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: `Properties in ${area}, Nairobi`,
+    name: areaHeadline(area),
     description: AREA_COPY[area].slice(0, 155),
     url: canonicalUrl,
     about: {
@@ -207,7 +207,7 @@ export default async function AreaPage({ params }: { params: Params }) {
 
       <div className="mt-4 max-w-2xl">
         <span className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Nairobi Neighbourhood</span>
-        <h1 className="mt-3 font-serif text-4xl font-semibold text-ivory">Apartments &amp; Homes for Sale in {area}, Nairobi</h1>
+        <h1 className="mt-3 font-serif text-4xl font-semibold text-ivory">{areaHeadline(area)}</h1>
         <p className="mt-4 text-sm leading-relaxed text-stone">{AREA_COPY[area]}</p>
       </div>
 

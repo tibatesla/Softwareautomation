@@ -100,7 +100,7 @@ export default async function HomePage() {
           {FOCUS_AREAS.map((area) => (
             <Link
               key={area}
-              href={`/properties?area=${encodeURIComponent(area)}`}
+              href={`/areas/${encodeURIComponent(area)}`}
               className="card-shine group relative flex flex-col justify-end overflow-hidden rounded-3xl border border-white/50 p-8 text-ivory transition-all hover:-translate-y-1 hover:border-gold/40"
               style={{ minHeight: "180px" }}
             >

@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   // redirect hop.
   metadataBase: new URL("https://www.chestoneproperties.com"),
   alternates: { canonical: "/" },
-  title: "Apartments & Homes for Sale in Nairobi | Chestone Properties",
+  title: "Apartments for Sale in Nairobi | Chestone Properties",
   description:
     "Chestone Properties Ltd — curated homes and apartments in Karen, Lavington, Runda, Westlands, Kilimani, Kileleshwa, and Riverside Drive, Nairobi.",
   keywords: [
@@ -52,14 +52,14 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "Chestone Properties",
     locale: "en_KE",
-    title: "Apartments & Homes for Sale in Nairobi | Chestone Properties",
+    title: "Apartments for Sale in Nairobi | Chestone Properties",
     description:
       "Chestone Properties Ltd — curated homes and apartments in Karen, Lavington, Runda, Westlands, Kilimani, Kileleshwa, and Riverside Drive, Nairobi.",
     images: [{ url: "/logo-full.png", width: 1023, height: 791, alt: "Chestone Properties" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Apartments & Homes for Sale in Nairobi | Chestone Properties",
+    title: "Apartments for Sale in Nairobi | Chestone Properties",
     description:
       "Chestone Properties Ltd — curated homes and apartments in Karen, Lavington, Runda, Westlands, Kilimani, Kileleshwa, and Riverside Drive, Nairobi.",
     images: ["/logo-full.png"],

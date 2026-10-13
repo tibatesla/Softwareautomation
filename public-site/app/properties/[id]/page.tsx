@@ -1,3 +1,4 @@
+import { areaHref } from "@/lib/landing-pages";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -118,7 +119,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
         {property.location && (
           <>
             <span>/</span>
-            <Link href={`/properties?area=${encodeURIComponent(property.location)}`} className="hover:text-gold">
+            <Link href={areaHref(property.location)} className="hover:text-gold">
               {property.location}
             </Link>
           </>

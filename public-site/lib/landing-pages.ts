@@ -1,4 +1,4 @@
-import type { PublicProperty } from "./types";
+import { FOCUS_AREAS, type PublicProperty } from "./types";
 
 export const LANDING_AREAS = ["Westlands", "Kilimani", "Kileleshwa", "Lavington", "Riverside", "Karen", "Runda"] as const;
 export type LandingArea = (typeof LANDING_AREAS)[number];
@@ -129,4 +129,31 @@ export function formatMillions(n: number): string {
 export function joinList(items: string[]): string {
   if (items.length <= 1) return items.join("");
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+// SEO headline per area, chosen from the Google Ads keyword plan. Used for the
+// <title>, H1, JSON-LD name and Open Graph/Twitter tags so they always agree.
+export const AREA_HEADLINES: Record<string, string> = {
+  Westlands: "Apartments for Sale in Westlands, Nairobi",
+  Kilimani: "Apartments for Sale in Kilimani, Nairobi",
+  Kileleshwa: "Apartments for Sale in Kileleshwa, Nairobi",
+  Lavington: "Apartments for Sale in Lavington, Nairobi",
+  Riverside: "Apartments for Sale in Riverside, Nairobi",
+  Karen: "Villas for Sale in Karen, Nairobi",
+  Runda: "Villas for Sale in Runda, Nairobi",
+};
+
+export function areaHeadline(area: string): string {
+  return AREA_HEADLINES[area] ?? `Properties for Sale in ${area}, Nairobi`;
+}
+
+// Link from a listing to its area landing page. Listing locations look like
+// "Karen, Nairobi", so match on the part before the comma. Falls back to the
+// filtered /properties page if the area isn't one of FOCUS_AREAS.
+export function areaHref(location: string): string {
+  const first = location.split(",")[0].trim().toLowerCase();
+  const area = FOCUS_AREAS.find((a) => a.toLowerCase() === first);
+  return area
+    ? `/areas/${encodeURIComponent(area)}`
+    : `/properties?area=${encodeURIComponent(location)}`;
 }

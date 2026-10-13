@@ -29,7 +29,7 @@ export async function generateMetadata({
   );
 
   if (!neighborhood) {
-    const title = "Properties | Chestone Properties Ltd";
+    const title = "All Properties for Sale in Nairobi | Chestone Properties";
     const description = "Browse available properties in Karen, Lavington, Runda, Westlands, Kilimani, Kileleshwa, and Riverside Drive.";
     return {
       title,
