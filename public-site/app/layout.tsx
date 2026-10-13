@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { WhatsAppWidget } from "@/components/whatsapp-widget";
 import { CurrencyProvider } from "@/components/currency-provider";
 import { fetchKesPerUsd } from "@/lib/currency";
+import { GoogleTagManager } from "@next/third-parties/google";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -93,9 +94,11 @@ const organizationJsonLd = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const kesPerUsd = await fetchKesPerUsd();
+  const gtmId = process.env.NEXT_PUBLIC_GTM_ID;
 
   return (
     <html lang="en">
+      {gtmId ? <GoogleTagManager gtmId={gtmId} /> : null}
       <body className={`${playfair.variable} ${inter.variable} antialiased flex min-h-screen flex-col`} suppressHydrationWarning>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
         <CurrencyProvider kesPerUsd={kesPerUsd}>
